@@ -307,7 +307,7 @@ export default function LoginPage() {
           return;
         }
 
-        router.push("/");
+        router.push("/deshboard");
         router.refresh();
       }
     } finally {
