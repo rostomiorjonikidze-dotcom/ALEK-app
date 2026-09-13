@@ -1,8 +1,242 @@
-import Link from "next/link";
+"use client";
 
-export default function WelcomePage() {
+import Link from "next/link";
+import { useState } from "react";
+
+type Lang = "fr" | "ka" | "ru" | "de" | "ar";
+
+const translations = {
+  fr: {
+    connect: "Se connecter",
+    start: "Commencer gratuitement",
+    badge: "Pensé pour les professionnels en France 🇫🇷",
+    hero1: "Écrivez dans votre langue.",
+    hero2: "Travaillez en français.",
+    intro:
+      "ALEK transforme votre description en texte professionnel français, prépare vos devis et factures et vous aide à gagner du temps au quotidien.",
+    pricing: "Voir les tarifs",
+    example: "EXEMPLE",
+    exampleInput:
+      "Rénovation complète d’une salle de bain, dépose, plomberie, carrelage et installation des équipements.",
+    professionalQuote: "Devis professionnel",
+    exampleOutput:
+      "Préparation du chantier, dépose des anciens équipements, modification des réseaux de plomberie, pose du carrelage et installation complète des nouveaux équipements sanitaires.",
+    featuresTitle: "Tout ce qu’il vous faut pour travailler plus simplement",
+    featuresSub:
+      "Un seul espace pour préparer, enregistrer et envoyer vos documents.",
+    ai: "Assistant IA",
+    aiText: "Transformez vos idées en français professionnel.",
+    devis: "Devis",
+    devisText: "Créez des devis clairs et professionnels.",
+    invoices: "Factures",
+    invoicesText: "Transformez rapidement un devis en facture.",
+    siret: "SIRET / SIREN",
+    siretText: "Retrouvez plus facilement les informations d’entreprise.",
+    pdf: "PDF",
+    pdfText: "Générez vos documents en PDF.",
+    history: "Historique",
+    historyText: "Retrouvez vos anciens devis et factures.",
+    ctaTitle: "Commencez gratuitement",
+    ctaText:
+      "Créez votre compte ALEK et préparez vos premiers documents en quelques minutes.",
+    createAccount: "Créer mon compte",
+    tariffs: "Tarifs",
+    terms: "Conditions",
+    privacy: "Confidentialité",
+    refund: "Remboursement",
+    contact: "Contact",
+  },
+
+  ka: {
+    connect: "შესვლა",
+    start: "დაიწყე უფასოდ",
+    badge: "შექმნილია საფრანგეთში მომუშავე პროფესიონალებისთვის 🇫🇷",
+    hero1: "დაწერე შენს ენაზე.",
+    hero2: "იმუშავე ფრანგულად.",
+    intro:
+      "ALEK შენს აღწერას პროფესიონალურ ფრანგულ ტექსტად გარდაქმნის, ამზადებს დევიზებსა და ინვოისებს და ყოველდღიურ სამუშაოში დროს გიზოგავს.",
+    pricing: "ფასების ნახვა",
+    example: "მაგალითი",
+    exampleInput:
+      "აბაზანის სრული რემონტი, დემონტაჟი, სანტექნიკა, კაფელი და მოწყობილობების მონტაჟი.",
+    professionalQuote: "პროფესიონალური დევიზი",
+    exampleOutput:
+      "სამუშაო ადგილის მომზადება, ძველი მოწყობილობების დემონტაჟი, სანტექნიკის ქსელის ცვლილება, კაფელის დაგება და ახალი სანიტარული მოწყობილობების სრული მონტაჟი.",
+    featuresTitle: "ყველაფერი, რაც სამუშაოს გასამარტივებლად გჭირდება",
+    featuresSub:
+      "ერთი სივრცე დოკუმენტების მოსამზადებლად, შესანახად და გასაგზავნად.",
+    ai: "AI ასისტენტი",
+    aiText: "გარდაქმენი შენი აზრი პროფესიონალურ ფრანგულ ტექსტად.",
+    devis: "დევიზები",
+    devisText: "შექმენი მკაფიო და პროფესიონალური დევიზები.",
+    invoices: "ინვოისები",
+    invoicesText: "სწრაფად გარდაქმენი დევიზი ინვოისად.",
+    siret: "SIRET / SIREN",
+    siretText: "უფრო მარტივად იპოვე კომპანიის ინფორმაცია.",
+    pdf: "PDF",
+    pdfText: "შექმენი შენი დოკუმენტები PDF ფორმატში.",
+    history: "ისტორია",
+    historyText: "ნახე ძველი დევიზები და ინვოისები.",
+    ctaTitle: "დაიწყე უფასოდ",
+    ctaText:
+      "შექმენი ALEK-ის ანგარიში და მოამზადე პირველი დოკუმენტები რამდენიმე წუთში.",
+    createAccount: "ანგარიშის შექმნა",
+    tariffs: "ფასები",
+    terms: "პირობები",
+    privacy: "კონფიდენციალურობა",
+    refund: "ანაზღაურება",
+    contact: "კონტაქტი",
+  },
+
+  ru: {
+    connect: "Войти",
+    start: "Начать бесплатно",
+    badge: "Создано для профессионалов, работающих во Франции 🇫🇷",
+    hero1: "Пишите на своём языке.",
+    hero2: "Работайте на французском.",
+    intro:
+      "ALEK превращает ваше описание в профессиональный французский текст, помогает создавать сметы и счета и экономит ваше время.",
+    pricing: "Посмотреть тарифы",
+    example: "ПРИМЕР",
+    exampleInput:
+      "Полный ремонт ванной комнаты, демонтаж, сантехника, плитка и установка оборудования.",
+    professionalQuote: "Профессиональная смета",
+    exampleOutput:
+      "Подготовка объекта, демонтаж старого оборудования, изменение сантехнических сетей, укладка плитки и полная установка нового санитарного оборудования.",
+    featuresTitle: "Всё необходимое для более простой работы",
+    featuresSub:
+      "Одно пространство для создания, хранения и отправки документов.",
+    ai: "ИИ-помощник",
+    aiText: "Превращайте свои идеи в профессиональный французский текст.",
+    devis: "Сметы",
+    devisText: "Создавайте понятные и профессиональные сметы.",
+    invoices: "Счета",
+    invoicesText: "Быстро превращайте смету в счёт.",
+    siret: "SIRET / SIREN",
+    siretText: "Быстро находите информацию о компаниях.",
+    pdf: "PDF",
+    pdfText: "Создавайте документы в формате PDF.",
+    history: "История",
+    historyText: "Находите старые сметы и счета.",
+    ctaTitle: "Начните бесплатно",
+    ctaText:
+      "Создайте аккаунт ALEK и подготовьте первые документы за несколько минут.",
+    createAccount: "Создать аккаунт",
+    tariffs: "Тарифы",
+    terms: "Условия",
+    privacy: "Конфиденциальность",
+    refund: "Возврат",
+    contact: "Контакты",
+  },
+
+  de: {
+    connect: "Anmelden",
+    start: "Kostenlos starten",
+    badge: "Für Berufstätige in Frankreich entwickelt 🇫🇷",
+    hero1: "Schreiben Sie in Ihrer Sprache.",
+    hero2: "Arbeiten Sie auf Französisch.",
+    intro:
+      "ALEK verwandelt Ihre Beschreibung in professionelles Französisch, erstellt Angebote und Rechnungen und spart Ihnen Zeit im Alltag.",
+    pricing: "Preise ansehen",
+    example: "BEISPIEL",
+    exampleInput:
+      "Komplette Renovierung eines Badezimmers, Demontage, Sanitärarbeiten, Fliesen und Installation der Ausstattung.",
+    professionalQuote: "Professionelles Angebot",
+    exampleOutput:
+      "Vorbereitung der Baustelle, Demontage der alten Ausstattung, Anpassung der Sanitärleitungen, Verlegung der Fliesen und vollständige Installation der neuen Sanitäreinrichtungen.",
+    featuresTitle: "Alles, was Sie für einfacheres Arbeiten brauchen",
+    featuresSub:
+      "Ein Ort zum Erstellen, Speichern und Versenden Ihrer Dokumente.",
+    ai: "KI-Assistent",
+    aiText: "Verwandeln Sie Ihre Ideen in professionelles Französisch.",
+    devis: "Angebote",
+    devisText: "Erstellen Sie klare und professionelle Angebote.",
+    invoices: "Rechnungen",
+    invoicesText: "Verwandeln Sie ein Angebot schnell in eine Rechnung.",
+    siret: "SIRET / SIREN",
+    siretText: "Finden Sie Unternehmensinformationen einfacher.",
+    pdf: "PDF",
+    pdfText: "Erstellen Sie Ihre Dokumente als PDF.",
+    history: "Verlauf",
+    historyText: "Finden Sie frühere Angebote und Rechnungen.",
+    ctaTitle: "Kostenlos starten",
+    ctaText:
+      "Erstellen Sie Ihr ALEK-Konto und bereiten Sie Ihre ersten Dokumente in wenigen Minuten vor.",
+    createAccount: "Konto erstellen",
+    tariffs: "Preise",
+    terms: "Bedingungen",
+    privacy: "Datenschutz",
+    refund: "Rückerstattung",
+    contact: "Kontakt",
+  },
+
+  ar: {
+    connect: "تسجيل الدخول",
+    start: "ابدأ مجانًا",
+    badge: "مصمم للمهنيين العاملين في فرنسا 🇫🇷",
+    hero1: "اكتب بلغتك.",
+    hero2: "واعمل بالفرنسية.",
+    intro:
+      "يحوّل ALEK وصفك إلى نص فرنسي احترافي، ويساعدك على إعداد عروض الأسعار والفواتير وتوفير الوقت في عملك اليومي.",
+    pricing: "عرض الأسعار",
+    example: "مثال",
+    exampleInput:
+      "تجديد كامل للحمام، إزالة التجهيزات القديمة، أعمال السباكة، البلاط وتركيب المعدات.",
+    professionalQuote: "عرض سعر احترافي",
+    exampleOutput:
+      "تجهيز موقع العمل، إزالة المعدات القديمة، تعديل شبكات السباكة، تركيب البلاط والتركيب الكامل للمعدات الصحية الجديدة.",
+    featuresTitle: "كل ما تحتاجه للعمل بسهولة أكبر",
+    featuresSub:
+      "مساحة واحدة لإنشاء مستنداتك وحفظها وإرسالها.",
+    ai: "مساعد الذكاء الاصطناعي",
+    aiText: "حوّل أفكارك إلى نص فرنسي احترافي.",
+    devis: "عروض الأسعار",
+    devisText: "أنشئ عروض أسعار واضحة واحترافية.",
+    invoices: "الفواتير",
+    invoicesText: "حوّل عرض السعر إلى فاتورة بسرعة.",
+    siret: "SIRET / SIREN",
+    siretText: "اعثر على معلومات الشركات بسهولة أكبر.",
+    pdf: "PDF",
+    pdfText: "أنشئ مستنداتك بصيغة PDF.",
+    history: "السجل",
+    historyText: "اعثر على عروض الأسعار والفواتير السابقة.",
+    ctaTitle: "ابدأ مجانًا",
+    ctaText:
+      "أنشئ حساب ALEK وأعد مستنداتك الأولى خلال دقائق قليلة.",
+    createAccount: "إنشاء حساب",
+    tariffs: "الأسعار",
+    terms: "الشروط",
+    privacy: "الخصوصية",
+    refund: "الاسترداد",
+    contact: "اتصل بنا",
+  },
+};
+
+const languages: { code: Lang; label: string }[] = [
+  { code: "fr", label: "🇫🇷 FR" },
+  { code: "ka", label: "🇬🇪 KA" },
+  { code: "ru", label: "🇷🇺 RU" },
+  { code: "de", label: "🇩🇪 DE" },
+  { code: "ar", label: "🇸🇦 AR" },
+];
+
+export default function HomePage() {
+  const [lang, setLang] = useState<Lang>("fr");
+  const t = translations[lang];
+  const rtl = lang === "ar";
+
+  const features = [
+    ["✨", t.ai, t.aiText],
+    ["📄", t.devis, t.devisText],
+    ["🧾", t.invoices, t.invoicesText],
+    ["🏢", t.siret, t.siretText],
+    ["📥", t.pdf, t.pdfText],
+    ["🕘", t.history, t.historyText],
+  ];
+
   return (
     <main
+      dir={rtl ? "rtl" : "ltr"}
       style={{
         minHeight: "100vh",
         background:
@@ -15,11 +249,12 @@ export default function WelcomePage() {
         style={{
           maxWidth: 1180,
           margin: "0 auto",
-          padding: "24px 24px",
+          padding: "22px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 20,
+          flexWrap: "wrap",
         }}
       >
         <div>
@@ -36,7 +271,7 @@ export default function WelcomePage() {
 
           <div
             style={{
-              fontSize: 12,
+              fontSize: 11,
               letterSpacing: 1.3,
               color: "#64748b",
               marginTop: 3,
@@ -49,24 +284,43 @@ export default function WelcomePage() {
         <div
           style={{
             display: "flex",
-            gap: 12,
+            gap: 10,
             alignItems: "center",
             flexWrap: "wrap",
           }}
         >
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as Lang)}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 10,
+              border: "1px solid #cbd5e1",
+              background: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {languages.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+
           <Link
             href="/login"
             style={{
               textDecoration: "none",
               color: "#1677e8",
               fontWeight: 700,
-              padding: "11px 18px",
+              padding: "11px 17px",
               border: "1px solid #1677e8",
               borderRadius: 10,
               background: "#fff",
             }}
           >
-            Se connecter
+            {t.connect}
           </Link>
 
           <Link
@@ -81,7 +335,7 @@ export default function WelcomePage() {
               boxShadow: "0 8px 22px rgba(22,119,232,0.22)",
             }}
           >
-            Commencer gratuitement
+            {t.start}
           </Link>
         </div>
       </header>
@@ -110,20 +364,20 @@ export default function WelcomePage() {
               marginBottom: 20,
             }}
           >
-            Pensé pour les professionnels en France 🇫🇷
+            {t.badge}
           </div>
 
           <h1
             style={{
               fontSize: "clamp(42px, 7vw, 72px)",
-              lineHeight: 1.02,
+              lineHeight: 1.04,
               margin: 0,
               letterSpacing: "-2px",
             }}
           >
-            Écrivez dans votre langue.
+            {t.hero1}
             <br />
-            <span style={{ color: "#1677e8" }}>Travaillez en français.</span>
+            <span style={{ color: "#1677e8" }}>{t.hero2}</span>
           </h1>
 
           <p
@@ -135,9 +389,7 @@ export default function WelcomePage() {
               marginTop: 24,
             }}
           >
-            ALEK transforme votre description en texte professionnel français,
-            prépare vos devis et factures et vous aide à gagner du temps au
-            quotidien.
+            {t.intro}
           </p>
 
           <div
@@ -161,7 +413,7 @@ export default function WelcomePage() {
                 boxShadow: "0 10px 28px rgba(22,119,232,0.25)",
               }}
             >
-              Commencer gratuitement
+              {t.start}
             </Link>
 
             <Link
@@ -177,7 +429,7 @@ export default function WelcomePage() {
                 border: "1px solid #dbe7f3",
               }}
             >
-              Voir les tarifs
+              {t.pricing}
             </Link>
           </div>
         </div>
@@ -199,7 +451,7 @@ export default function WelcomePage() {
               marginBottom: 10,
             }}
           >
-            EXEMPLE
+            {t.example}
           </div>
 
           <div
@@ -212,14 +464,12 @@ export default function WelcomePage() {
               marginBottom: 18,
             }}
           >
-            “Rénovation complète d’une salle de bain, dépose, plomberie,
-            carrelage et installation des équipements.”
+            “{t.exampleInput}”
           </div>
 
           <div
             style={{
-              display: "flex",
-              justifyContent: "center",
+              textAlign: "center",
               margin: "12px 0",
               fontSize: 28,
             }}
@@ -243,13 +493,11 @@ export default function WelcomePage() {
                 color: "#1677e8",
               }}
             >
-              Devis professionnel
+              {t.professionalQuote}
             </div>
 
             <div style={{ color: "#52647a", lineHeight: 1.7 }}>
-              Préparation du chantier, dépose des anciens équipements,
-              modification des réseaux de plomberie, pose du carrelage et
-              installation complète des nouveaux équipements sanitaires.
+              {t.exampleOutput}
             </div>
           </div>
         </div>
@@ -262,21 +510,8 @@ export default function WelcomePage() {
           padding: "60px 24px",
         }}
       >
-        <div
-          style={{
-            textAlign: "center",
-            marginBottom: 36,
-          }}
-        >
-          <h2
-            style={{
-              fontSize: 36,
-              margin: 0,
-            }}
-          >
-            Tout ce qu’il vous faut pour travailler plus simplement
-          </h2>
-
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <h2 style={{ fontSize: 36, margin: 0 }}>{t.featuresTitle}</h2>
           <p
             style={{
               color: "#64748b",
@@ -284,7 +519,7 @@ export default function WelcomePage() {
               marginTop: 12,
             }}
           >
-            Un seul espace pour préparer, enregistrer et envoyer vos documents.
+            {t.featuresSub}
           </p>
         </div>
 
@@ -295,14 +530,7 @@ export default function WelcomePage() {
             gap: 18,
           }}
         >
-          {[
-            ["✨", "Assistant IA", "Transformez vos idées en français professionnel."],
-            ["📄", "Devis", "Créez des devis clairs et professionnels."],
-            ["🧾", "Factures", "Transformez rapidement un devis en facture."],
-            ["🏢", "SIRET / SIREN", "Retrouvez plus facilement les informations d’entreprise."],
-            ["📥", "PDF", "Générez vos documents en PDF."],
-            ["🕘", "Historique", "Retrouvez vos anciens devis et factures."],
-          ].map(([icon, title, text]) => (
+          {features.map(([icon, title, text]) => (
             <div
               key={title}
               style={{
@@ -310,7 +538,7 @@ export default function WelcomePage() {
                 border: "1px solid #e7edf5",
                 borderRadius: 18,
                 padding: 24,
-                boxShadow: "0 10px 30px rgba(30, 64, 100, 0.06)",
+                boxShadow: "0 10px 30px rgba(30,64,100,0.06)",
               }}
             >
               <div style={{ fontSize: 30 }}>{icon}</div>
@@ -323,6 +551,7 @@ export default function WelcomePage() {
               >
                 {title}
               </div>
+
               <div
                 style={{
                   color: "#64748b",
@@ -353,14 +582,7 @@ export default function WelcomePage() {
             color: "#fff",
           }}
         >
-          <h2
-            style={{
-              fontSize: 38,
-              margin: 0,
-            }}
-          >
-            Commencez gratuitement
-          </h2>
+          <h2 style={{ fontSize: 38, margin: 0 }}>{t.ctaTitle}</h2>
 
           <p
             style={{
@@ -371,8 +593,7 @@ export default function WelcomePage() {
               lineHeight: 1.6,
             }}
           >
-            Créez votre compte ALEK et préparez vos premiers documents en
-            quelques minutes.
+            {t.ctaText}
           </p>
 
           <Link
@@ -388,7 +609,7 @@ export default function WelcomePage() {
               fontSize: 17,
             }}
           >
-            Créer mon compte
+            {t.createAccount}
           </Link>
         </div>
       </section>
@@ -422,19 +643,19 @@ export default function WelcomePage() {
             }}
           >
             <Link href="/pricing" style={{ color: "inherit" }}>
-              Tarifs
+              {t.tariffs}
             </Link>
             <Link href="/terms" style={{ color: "inherit" }}>
-              Conditions
+              {t.terms}
             </Link>
             <Link href="/privacy" style={{ color: "inherit" }}>
-              Confidentialité
+              {t.privacy}
             </Link>
             <Link href="/refund" style={{ color: "inherit" }}>
-              Remboursement
+              {t.refund}
             </Link>
             <Link href="/contact" style={{ color: "inherit" }}>
-              Contact
+              {t.contact}
             </Link>
           </div>
         </div>
