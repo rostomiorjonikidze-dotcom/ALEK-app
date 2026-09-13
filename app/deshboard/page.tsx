@@ -741,7 +741,7 @@ export default function Home() {
 
   async function logout() {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    window.location.href = "/deshboard";
   }
 
   function createNewDevis() {
