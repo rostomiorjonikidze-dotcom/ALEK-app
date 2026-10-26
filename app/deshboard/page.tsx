@@ -1115,6 +1115,22 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
   const outstandingRevenue = invoiceDocs.filter(d => d.invoice_status !== "paid").reduce((sum,d)=>sum+(Number(d.total_ttc)||0),0);
   const money = (n:number)=>new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR"}).format(n);
   const clientCount = new Set(savedDocuments.map(d=>d.client_name?.trim().toLowerCase()).filter(Boolean)).size;
+  const monthlyActivity = Array.from({ length: 6 }, (_, i) => {
+    const date = new Date();
+    date.setDate(1);
+    date.setMonth(date.getMonth() - (5 - i));
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const documents = savedDocuments.filter(d => {
+      const raw = (d as unknown as Record<string, unknown>).created_at;
+      if (typeof raw !== "string") return false;
+      const parsed = new Date(raw);
+      return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === year && parsed.getMonth() === month;
+    });
+    return { label: new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(date), count: documents.length };
+  });
+  const maxMonthlyActivity = Math.max(1, ...monthlyActivity.map(m => m.count));
+
 
   return (
     <main dir="ltr" className="alek-premium-dashboard min-h-screen overflow-x-hidden bg-[#f5f7fc] text-slate-900">
@@ -1129,6 +1145,12 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Vue d’ensemble</p><h2 className="mt-1 text-xl font-black text-[#14213b]">Activité des documents</h2></div><span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Données enregistrées</span></div>
             <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">{[{label:"Devis",count:quoteDocs.length,color:"bg-blue-500"},{label:"Factures",count:invoiceDocs.length,color:"bg-indigo-500"},{label:"Payées",count:invoiceDocs.filter(doc=>doc.invoice_status==="paid").length,color:"bg-emerald-500"},{label:"À encaisser",count:invoiceDocs.filter(doc=>doc.invoice_status!=="paid").length,color:"bg-amber-500"}].map(item=><div key={item.label} className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-black text-[#14213b]">{item.count}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${item.color}`} style={{width:`${savedDocuments.length ? Math.round(item.count/savedDocuments.length*100):0}%`}} /></div></div>)}</div>
+            <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-black text-[#14213b]">Documents créés par mois</h3><p className="mt-1 text-xs text-slate-500">Six derniers mois · données enregistrées</p></div><span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600">{monthlyActivity.reduce((sum, item) => sum + item.count, 0)} documents</span></div>
+              <div className="mt-5 grid h-40 grid-cols-6 items-end gap-2 sm:gap-4" role="img" aria-label={monthlyActivity.map(m => `${m.label} : ${m.count} documents`).join(", ")}>
+                {monthlyActivity.map((item, index) => <div key={index} className="flex h-full min-w-0 flex-col items-center justify-end gap-2"><span className="text-xs font-bold tabular-nums text-slate-600">{item.count}</span><div className="flex h-28 w-full items-end rounded-lg bg-blue-100/60 p-1"><div className="w-full rounded-md bg-gradient-to-t from-blue-700 to-blue-400 transition-all" style={{height: item.count ? `${Math.max(8, item.count / maxMonthlyActivity * 100)}%` : "0%"}} /></div><span className="text-[10px] font-semibold capitalize text-slate-500 sm:text-xs">{item.label}</span></div>)}
+              </div>
+            </div>
             <div className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 sm:flex-row"><div role="img" aria-label={`Répartition : ${quoteDocs.length} devis et ${invoiceDocs.length} factures`} className="relative grid size-32 shrink-0 place-items-center rounded-full" style={{background: savedDocuments.length ? `conic-gradient(#2563eb 0% ${quoteDocs.length / savedDocuments.length * 100}%, #6366f1 ${quoteDocs.length / savedDocuments.length * 100}% 100%)` : "#e2e8f0"}}><div className="grid size-24 place-items-center rounded-full bg-white text-center"><div><strong className="block text-2xl font-black text-slate-900">{savedDocuments.length}</strong><span className="text-[10px] font-semibold text-slate-500">documents</span></div></div></div><div className="min-w-0 flex-1"><h3 className="font-black text-[#14213b]">Répartition des documents</h3><p className="mt-1 text-xs text-slate-500">Calculée sur vos documents enregistrés</p><div className="mt-4 grid gap-2 text-sm"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-blue-600" />Devis</span><strong>{quoteDocs.length}</strong></div><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-indigo-500" />Factures</span><strong>{invoiceDocs.length}</strong></div></div></div></div><div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-500"><span>Les indicateurs reflètent uniquement vos documents enregistrés.</span><button type="button" onClick={openHistory} className="font-bold text-blue-700 hover:underline">Consulter l’historique →</button></div>
           </div>
           <div className="rounded-3xl bg-[#101c34] p-6 text-white shadow-[0_16px_35px_rgba(16,28,52,.14)] sm:p-7"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-300">Accès rapide</p><h2 className="mt-3 text-2xl font-black">Votre prochain document</h2><p className="mt-3 text-sm leading-6 text-slate-300">Créez un devis ou une facture, complétez les informations et visualisez le résultat avant export.</p><div className="mt-6 grid gap-3"><button type="button" onClick={()=>{setDocumentType("devis");scrollToSection("document-section")}} className="rounded-xl bg-blue-600 px-5 py-3 text-left text-sm font-bold text-white hover:bg-blue-500">＋ Nouveau devis</button><button type="button" onClick={()=>{setDocumentType("facture");scrollToSection("document-section")}} className="rounded-xl border border-white/25 px-5 py-3 text-left text-sm font-bold text-white hover:bg-white/10">＋ Nouvelle facture</button></div></div>
