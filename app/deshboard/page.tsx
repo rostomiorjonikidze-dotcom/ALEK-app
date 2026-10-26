@@ -1101,22 +1101,22 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
     );
   }
 
-  const navButton = "w-full rounded-xl px-4 py-3 text-left font-medium text-stone-600 transition hover:bg-[#f8efe5]";
+  const navButton = "w-full rounded-xl px-4 py-3 text-left font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400";
 
   return (
     <main dir="ltr" className="min-h-screen overflow-x-hidden bg-gradient-to-br from-[#f3f8ff] via-white to-[#f7faff] text-slate-900">
       <div className="mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-6 sm:py-6 lg:pl-72"><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white/90 px-4 py-3 shadow-sm"><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ALEK ARTISAN</p><p className="text-sm text-slate-600">Votre espace professionnel</p></div><div className="flex flex-wrap items-center gap-2"><Link href="/a-propos" className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50">À propos</Link><InstallApp /></div></div><div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Facturation électronique 2026–2027 :</strong> les factures PDF classiques ne remplacent pas les factures électroniques réglementaires. Pour les échanges B2B concernés, une plateforme agréée est nécessaire. Vérifiez les mentions obligatoires avant émission.</div>
-        <aside className="fixed bottom-6 left-6 top-6 hidden w-60 overflow-y-auto rounded-[28px] border border-orange-100/80 bg-[#fffdf9]/95 p-4 shadow-[0_18px_50px_rgba(120,72,24,0.10)] backdrop-blur lg:block">
+        <aside className="fixed bottom-5 left-5 top-5 hidden w-60 overflow-y-auto rounded-[28px] border border-white/10 bg-[#101c34] p-4 text-white shadow-[0_22px_65px_rgba(11,27,58,0.30)] lg:block">
           <div className="mb-7 flex items-center gap-3 px-2">
             <img src="/alek-logo.png" alt="ALEK" className="h-11 w-11 rounded-xl object-cover" />
             <div>
               <p className="text-xl font-extrabold tracking-wide">ALEK</p>
-              {userRole === "owner" && <p className="text-xs font-semibold text-amber-700">OWNER • ∞</p>}
+              {userRole === "owner" && <p className="text-xs font-semibold text-blue-300">OWNER • ∞</p>}
             </div>
           </div>
 
           <nav className="space-y-1">
-            <button type="button" onClick={() => { setShowHistory(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} className={`${navButton} bg-amber-600 text-white hover:bg-amber-700`}>🏠 {t.navHome}</button>
+            <button type="button" onClick={() => { setShowHistory(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} className={`${navButton} bg-blue-600 text-white hover:bg-blue-500`}>🏠 {t.navHome}</button>
             <button type="button" onClick={() => scrollToSection("client-section")} className={navButton}>👥 {t.navClients}</button>
             <button type="button" onClick={() => { setDocumentType("devis"); scrollToSection("document-section"); }} className={navButton}>📄 {t.navDevis}</button>
             <button type="button" onClick={() => { setDocumentType("facture"); scrollToSection("document-section"); }} className={navButton}>🧾 {t.navFactures}</button>
@@ -1126,12 +1126,12 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
           </nav>
 
           <div className="mt-8 border-t pt-4">
-            {userEmail && <p className="mb-2 truncate px-2 text-xs text-stone-500">{userEmail}</p>}
-            <button type="button" onClick={logout} className="w-full rounded-xl px-4 py-3 text-left font-semibold text-red-600 hover:bg-red-50">↪ {t.logout}</button>
+            {userEmail && <p className="mb-2 truncate px-2 text-xs text-slate-400">{userEmail}</p>}
+            <button type="button" onClick={logout} className="w-full rounded-xl px-4 py-3 text-left font-semibold text-rose-300 hover:bg-white/10">↪ {t.logout}</button>
           </div>
         </aside>
 
-        <div className="mb-5 flex flex-col gap-5 rounded-[28px] border border-orange-100/80 bg-gradient-to-r from-[#fff4e8] via-[#fffdf9] to-[#fff8f0] p-5 shadow-[0_16px_40px_rgba(120,72,24,0.09)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-5 rounded-[28px] border border-blue-100 bg-gradient-to-r from-[#e9f2ff] via-white to-[#f3f7ff] p-5 shadow-[0_16px_40px_rgba(24,68,140,0.08)] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <img src="/alek-logo.png" alt="ALEK" className="h-12 w-12 rounded-xl object-cover" />
             <div>
