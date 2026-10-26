@@ -1167,9 +1167,12 @@ export default function Home() {
       const parsed = new Date(raw);
       return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === year && parsed.getMonth() === month;
     });
-    return { label: new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(date), count: documents.length };
+    return { label: new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(date), count: documents.length, paidAmount: documents.filter(d => d.document_type === "facture" && d.invoice_status === "paid").reduce((sum, d) => sum + (Number(d.total_ttc) || 0), 0) };
   });
   const maxMonthlyActivity = Math.max(1, ...monthlyActivity.map(m => m.count));
+  const maxMonthlyPaid = Math.max(1, ...monthlyActivity.map(m => m.paidAmount));
+  const monthlyRevenuePoints = monthlyActivity.map((m, index) => `${20 + index * 64},${128 - (m.paidAmount / maxMonthlyPaid) * 108}`).join(" ");
+
 
 
   return (
@@ -1187,6 +1190,14 @@ export default function Home() {
             <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">{[{label:"Devis",count:quoteDocs.length,color:"bg-blue-500"},{label:"Factures",count:invoiceDocs.length,color:"bg-indigo-500"},{label:"Payées",count:invoiceDocs.filter(doc=>doc.invoice_status==="paid").length,color:"bg-emerald-500"},{label:"À encaisser",count:invoiceDocs.filter(doc=>doc.invoice_status!=="paid").length,color:"bg-amber-500"}].map(item=><div key={item.label} className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-black text-[#14213b]">{item.count}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${item.color}`} style={{width:`${savedDocuments.length ? Math.round(item.count/savedDocuments.length*100):0}%`}} /></div></div>)}</div>
             <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-black text-[#14213b]">Documents créés par mois</h3><p className="mt-1 text-xs text-slate-500">Six derniers mois · données enregistrées</p></div><span className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600">{monthlyActivity.reduce((sum, item) => sum + item.count, 0)} documents</span></div>
+              <div className="mt-5 rounded-2xl border border-blue-100 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2"><div><h4 className="text-sm font-bold text-[#14213b]">Factures payées par mois de création</h4><p className="mt-1 text-xs text-slate-500">Montants TTC · date de création du document, pas date d’encaissement</p></div><strong className="text-sm text-blue-700">{money(monthlyActivity.reduce((sum,m)=>sum+m.paidAmount,0))}</strong></div>
+                <svg viewBox="0 0 360 155" role="img" aria-label={monthlyActivity.map(m=>`${m.label}: ${money(m.paidAmount)}`).join(", ")} className="mt-4 h-44 w-full overflow-visible">
+                  {[20,74,128].map(y=><line key={y} x1="20" x2="340" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="4 5" />)}
+                  <polyline points={monthlyRevenuePoints} fill="none" stroke="#2563eb" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                  {monthlyActivity.map((m,i)=><g key={i}><circle cx={20+i*64} cy={128-(m.paidAmount/maxMonthlyPaid)*108} r="4" fill="#2563eb" stroke="white" strokeWidth="2"/><text x={20+i*64} y="149" textAnchor="middle" fontSize="10" fill="#64748b">{m.label}</text></g>)}
+                </svg>
+              </div>
               <div className="mt-5 grid h-40 grid-cols-6 items-end gap-2 sm:gap-4" role="img" aria-label={monthlyActivity.map(m => `${m.label} : ${m.count} documents`).join(", ")}>
                 {monthlyActivity.map((item, index) => <div key={index} className="flex h-full min-w-0 flex-col items-center justify-end gap-2"><span className="text-xs font-bold tabular-nums text-slate-600">{item.count}</span><div className="flex h-28 w-full items-end rounded-lg bg-blue-100/60 p-1"><div className="w-full rounded-md bg-gradient-to-t from-blue-700 to-blue-400 transition-all" style={{height: item.count ? `${Math.max(8, item.count / maxMonthlyActivity * 100)}%` : "0%"}} /></div><span className="text-[10px] font-semibold capitalize text-slate-500 sm:text-xs">{item.label}</span></div>)}
               </div>
