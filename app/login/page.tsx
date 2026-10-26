@@ -339,6 +339,7 @@ export default function LoginPage() {
         flexWrap: "wrap",
         padding: "24px",
         fontFamily: "Arial, sans-serif",
+        width: "100%",
       }}
     >
       <section className="hidden max-w-[530px] flex-1 text-white lg:block" aria-label="Présentation ALEK Artisan"><p className="mb-5 text-sm font-bold uppercase tracking-[.25em] text-blue-200">ALEK Artisan</p><h1 className="text-5xl font-black leading-[1.13] tracking-tight">Des devis précis.<br/>Des factures simples.</h1><p className="mt-7 max-w-lg text-lg leading-8 text-blue-100">Votre espace professionnel pour préparer vos devis, gérer vos factures et retrouver vos documents, avec une assistance IA en français.</p><div className="mt-9 grid grid-cols-2 gap-4"><div className="rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur"><p className="text-3xl font-black">01</p><p className="mt-2 text-sm text-blue-100">Décrivez votre prestation</p></div><div className="rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur"><p className="text-3xl font-black">02</p><p className="mt-2 text-sm text-blue-100">Préparez votre document</p></div></div><p className="mt-8 text-sm text-blue-200">Devis · Factures · PDF · Assistant IA</p></section>

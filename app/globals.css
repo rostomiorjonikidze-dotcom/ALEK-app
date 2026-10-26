@@ -79,3 +79,9 @@ input, select, textarea { max-width: 100%; }
 :root { color-scheme: light; --alek-surface: #ffffff; --alek-soft: #f5f7fc; --alek-accent: #2563eb; --alek-radius: 1.25rem; }
 :where(button,a,input,textarea,select):focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *,*::before,*::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* Shared responsive controls for ALEK document editor and auth */
+#client-section,#services-section,#settings-section,#alek-live-preview,#history-section { scroll-margin-top: 5rem; }
+#alek-live-preview textarea,#client-section input,#services-section input,#settings-section input { transition: border-color .15s ease, box-shadow .15s ease; }
+#alek-live-preview textarea:focus,#client-section input:focus,#services-section input:focus,#settings-section input:focus { box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+@media(max-width:640px){ #alek-live-preview section { min-width:0; } #alek-live-preview textarea { max-width:100%; } }
