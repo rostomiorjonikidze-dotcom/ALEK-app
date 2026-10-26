@@ -763,6 +763,7 @@ export default function Home() {
   function createNewDevis() {
     setSelectedDocumentId(null);
     setShowHistory(false);
+    setEditorStep(0);
     setDocumentType("devis");
     setDevisNumber(nextDocumentNumber("devis"));
     setDevisDate(todayInput());
@@ -780,6 +781,7 @@ export default function Home() {
   function createNewInvoice() {
     setSelectedDocumentId(null);
     setShowHistory(false);
+    setEditorStep(0);
     setDocumentType("facture");
     setInvoiceNumber(nextDocumentNumber("facture"));
     setInvoiceDate(todayInput());
@@ -801,6 +803,7 @@ export default function Home() {
   function transformToInvoice() {
     const sourceDevis = devisNumber;
     setSelectedDocumentId(null);
+    setEditorStep(0);
     setDocumentType("facture");
     setInvoiceNumber(nextDocumentNumber("facture"));
     setDevisReference(sourceDevis);
@@ -961,6 +964,7 @@ export default function Home() {
 
   function openSavedDocument(doc: SavedDocument) {
     setSelectedDocumentId(doc.id);
+    setEditorStep(0);
     setShowHistory(false);
     setDocumentType(doc.document_type);
     setClientName(doc.client_name || "");
