@@ -6,8 +6,8 @@ export default function WelcomePage() {
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(135deg, #f7fbff 0%, #eef6ff 45%, #ffffff 100%)",
-        color: "#10233f",
+          "linear-gradient(140deg, #101c34 0%, #183866 52%, #1e4c8e 100%)",
+        color: "#ffffff",
         fontFamily: "Arial, Helvetica, sans-serif",
       }}
     >
@@ -28,7 +28,7 @@ export default function WelcomePage() {
               fontSize: 30,
               fontWeight: 800,
               letterSpacing: 1,
-              color: "#1677e8",
+              color: "#93c5fd",
             }}
           >
             ALEK
@@ -38,7 +38,7 @@ export default function WelcomePage() {
             style={{
               fontSize: 12,
               letterSpacing: 1.3,
-              color: "#64748b",
+              color: "#cbd5e1",
               marginTop: 3,
             }}
           >
@@ -58,7 +58,7 @@ export default function WelcomePage() {
             href="/login"
             style={{
               textDecoration: "none",
-              color: "#1677e8",
+              color: "#93c5fd",
               fontWeight: 700,
               padding: "11px 18px",
               border: "1px solid #1677e8",
@@ -102,7 +102,7 @@ export default function WelcomePage() {
             style={{
               display: "inline-block",
               background: "#e8f3ff",
-              color: "#1677e8",
+              color: "#93c5fd",
               fontWeight: 700,
               fontSize: 14,
               padding: "8px 12px",
@@ -123,7 +123,7 @@ export default function WelcomePage() {
           >
             Écrivez dans votre langue.
             <br />
-            <span style={{ color: "#1677e8" }}>Travaillez en français.</span>
+            <span style={{ color: "#93c5fd" }}>Travaillez en français.</span>
           </h1>
 
           <p
@@ -240,7 +240,7 @@ export default function WelcomePage() {
                 fontWeight: 800,
                 fontSize: 18,
                 marginBottom: 10,
-                color: "#1677e8",
+                color: "#93c5fd",
               }}
             >
               Devis professionnel
@@ -279,7 +279,7 @@ export default function WelcomePage() {
 
           <p
             style={{
-              color: "#64748b",
+              color: "#cbd5e1",
               fontSize: 18,
               marginTop: 12,
             }}
@@ -325,7 +325,7 @@ export default function WelcomePage() {
               </div>
               <div
                 style={{
-                  color: "#64748b",
+                  color: "#cbd5e1",
                   lineHeight: 1.6,
                   marginTop: 8,
                 }}
