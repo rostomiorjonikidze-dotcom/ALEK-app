@@ -6,11 +6,11 @@ import InstallApp from "./components/InstallApp";
 const t = {
     connect: "Se connecter",
     start: "Commencer gratuitement",
-    badge: "Pensé pour les professionnels en France 🇫🇷",
+    badge: "Pour toutes les entreprises en France 🇫🇷",
     hero1: "Créez vos devis.",
     hero2: "Facturez en toute simplicité.",
     intro:
-      "ALEK vous aide à préparer vos devis et factures, organiser vos prestations et suivre vos documents en français.",
+      "ALEK accompagne les indépendants et les entreprises de toutes tailles pour préparer des devis et factures, organiser leurs prestations et retrouver leurs documents.",
     pricing: "Voir les tarifs",
     example: "EXEMPLE",
     exampleInput:
@@ -18,15 +18,15 @@ const t = {
     professionalQuote: "Devis professionnel",
     exampleOutput:
       "Préparation du chantier, dépose des anciens équipements, modification des réseaux de plomberie, pose du carrelage et installation complète des nouveaux équipements sanitaires.",
-    featuresTitle: "Tout ce qu’il vous faut pour travailler plus simplement",
+    featuresTitle: "La facturation professionnelle pour toutes les entreprises",
     featuresSub:
-      "Un seul espace pour préparer, enregistrer et envoyer vos documents.",
+      "Indépendants, artisans, commerçants, TPE, PME et grandes entreprises : préparez et retrouvez vos documents au même endroit.",
     ai: "Assistant IA",
     aiText: "Préparez des prestations claires avec l’assistant IA.",
     devis: "Devis",
     devisText: "Créez des devis clairs et professionnels.",
     invoices: "Factures",
-    invoicesText: "Transformez rapidement un devis en facture.",
+    invoicesText: "Convertissez un devis en facture depuis votre espace.",
     siret: "SIRET / SIREN",
     siretText: "Retrouvez plus facilement les informations d’entreprise.",
     pdf: "PDF",
