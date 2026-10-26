@@ -154,3 +154,12 @@ body { font-family: Arial, Helvetica, sans-serif; }
  @keyframes alek-enter { from {opacity:0;transform:translateY(12px)} to {opacity:1;transform:translateY(0)} }
  .alek-premium-dashboard #alek-live-preview { animation:alek-enter .45s ease-out both; }
 }
+
+/* ALEK unified premium surfaces */
+.alek-public-page { background: radial-gradient(ellipse at 85% 4%,rgba(205,222,255,.36),transparent 42%),#f3f6fc; }
+.alek-public-page h1,.alek-public-page h2,.alek-premium-dashboard h1,.alek-premium-dashboard h2 { letter-spacing:-.035em; }
+.alek-public-page :is(a,button),.alek-premium-dashboard :is(a,button) { transition:transform .2s ease,box-shadow .2s ease,background-color .2s ease; }
+.alek-public-page :is(a,button):active,.alek-premium-dashboard :is(a,button):active { transform:scale(.98); }
+.alek-premium-dashboard .alek-kpi-grid>div:nth-child(1):before,.alek-premium-dashboard .alek-kpi-grid>div:nth-child(2):before,.alek-premium-dashboard .alek-kpi-grid>div:nth-child(3):before,.alek-premium-dashboard .alek-kpi-grid>div:nth-child(4):before {content:"";position:absolute;right:-28px;top:-34px;width:115px;height:115px;border-radius:50%;background:radial-gradient(circle,rgba(69,128,246,.12),transparent 70%);pointer-events:none;}
+.alek-premium-dashboard .alek-dashboard-hero button { border-radius:14px; }
+@media(max-width:640px){.alek-premium-dashboard .alek-dashboard-hero{padding:24px 20px}.alek-premium-dashboard .alek-kpi-grid>div{min-height:128px}.alek-premium-dashboard .alek-editor-steps{top:6px}}
