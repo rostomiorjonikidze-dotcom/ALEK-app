@@ -30,3 +30,25 @@ input, select, textarea { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ALEK Artisan premium dashboard: preserve document forms and business logic */
+.alek-premium-dashboard section[id],
+.alek-premium-dashboard .border-orange-100,
+.alek-premium-dashboard .border-orange-200 {
+  border-color: #e2e8f0 !important;
+}
+.alek-premium-dashboard .bg-\[\#fffdf9\],
+.alek-premium-dashboard .bg-\[\#fff9f3\],
+.alek-premium-dashboard .bg-\[\#fff8f0\] {
+  background-color: #fff !important;
+}
+.alek-premium-dashboard .text-amber-700,
+.alek-premium-dashboard .text-amber-600 { color: #2563eb !important; }
+.alek-premium-dashboard input:focus,
+.alek-premium-dashboard textarea:focus,
+.alek-premium-dashboard select:focus { border-color: #3b82f6; }
+.alek-premium-dashboard section[id] { box-shadow: 0 8px 35px rgba(21,43,80,.05); }
+@media (max-width: 640px) {
+ .alek-premium-dashboard section[id] { padding: 16px; }
+ .alek-premium-dashboard table { display: block; max-width: 100%; overflow-x: auto; }
+}
