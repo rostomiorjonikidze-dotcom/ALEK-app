@@ -90,3 +90,9 @@ input, select, textarea { max-width: 100%; }
 summary::-webkit-details-marker { display: none; }
 header [aria-current="page"] { font-weight: 800; }
 @media (max-width: 767px) { header nav[aria-label="Navigation mobile"] a { display: block; } }
+
+/* Unified premium dashboard content surfaces */
+.alek-premium-dashboard { background: #f5f7fc; }
+.alek-premium-dashboard section { min-width: 0; }
+.alek-premium-dashboard button { touch-action: manipulation; }
+@media (max-width: 640px) { .alek-premium-dashboard h1 { line-height: 1.2; } }
