@@ -96,3 +96,19 @@ header [aria-current="page"] { font-weight: 800; }
 .alek-premium-dashboard section { min-width: 0; }
 .alek-premium-dashboard button { touch-action: manipulation; }
 @media (max-width: 640px) { .alek-premium-dashboard h1 { line-height: 1.2; } }
+
+/* Responsive document editor: readable controls and no clipped content */
+.alek-premium-dashboard #client-section,
+.alek-premium-dashboard #services-section,
+.alek-premium-dashboard #settings-section,
+.alek-premium-dashboard #document-section { min-width: 0; }
+.alek-premium-dashboard :is(#client-section,#services-section,#settings-section,#document-section) :is(input,select,textarea) { max-width:100%; min-width:0; }
+.alek-premium-dashboard #alek-live-preview { min-width:0; }
+@media (max-width: 640px) {
+  .alek-premium-dashboard .alek-editor-steps { top: 0.25rem; }
+  .alek-premium-dashboard .alek-editor-steps button { min-height: 44px; overflow-wrap: anywhere; }
+  .alek-premium-dashboard :is(#client-section,#services-section,#settings-section,#document-section) { padding: 1rem; border-radius: 1.125rem; }
+  .alek-premium-dashboard #alek-live-preview section { padding:1rem; border-radius:1.125rem; }
+  .alek-premium-dashboard :is(#client-section,#services-section,#settings-section) button { min-height:44px; }
+  .alek-premium-dashboard #alek-live-preview :is(p,strong,span) { overflow-wrap:anywhere; }
+}
