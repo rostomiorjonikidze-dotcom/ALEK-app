@@ -61,7 +61,7 @@ export default function HomePage() {
       style={{
         minHeight: "100vh",
         background:
-          "linear-gradient(135deg, #f7fbff 0%, #eef6ff 45%, #ffffff 100%)",
+          "radial-gradient(ellipse at 85% 10%, #dceaff 0%, transparent 42%), linear-gradient(145deg, #f7faff 0%, #ffffff 62%, #edf4ff 100%)",
         color: "#10233f",
         fontFamily: "Arial, Helvetica, sans-serif",
         overflowX: "hidden",
@@ -83,7 +83,7 @@ export default function HomePage() {
           <div
             style={{
               fontSize: 30,
-              fontWeight: 800,
+              fontWeight: 900,
               letterSpacing: 1,
               color: "#1677e8",
             }}
@@ -137,7 +137,7 @@ export default function HomePage() {
               fontWeight: 700,
               padding: "12px 18px",
               borderRadius: 10,
-              background: "#1677e8",
+              background: "linear-gradient(125deg,#2563eb,#1d4ed8)",
               boxShadow: "0 8px 22px rgba(22,119,232,0.22)",
             }}
           >
@@ -246,7 +246,7 @@ export default function HomePage() {
             border: "1px solid #e5edf6",
             borderRadius: 24,
             padding: "clamp(18px,4vw,30px)",
-            boxShadow: "0 25px 70px rgba(27, 67, 110, 0.12)",
+            boxShadow: "0 28px 85px rgba(27, 67, 110, 0.16)",
             minWidth:0,
           }}
         >
@@ -382,7 +382,7 @@ export default function HomePage() {
       >
         <div
           style={{
-            background: "#10233f",
+            background: "linear-gradient(120deg,#101c34,#183b73)",
             borderRadius: 26,
             padding: "48px 30px",
             textAlign: "center",
