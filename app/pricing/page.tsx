@@ -35,11 +35,11 @@ function Footer() {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[#f5f7fc] text-[#14213b]">
+    <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
       <SiteHeader />
       <div className="px-4 py-10">
       <div className="mx-auto max-w-6xl">
-        <header className="rounded-[30px] border border-white/10 bg-[#101c34] p-7 text-white shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
+        <header className="relative overflow-hidden rounded-[34px] border border-white/10 bg-gradient-to-br from-[#071a35] via-[#133a78] to-[#215bb4] p-9 text-white shadow-[0_25px_75px_rgba(16,45,95,.22)]">
           <div className="flex items-center gap-4">
             <Link href="/" aria-label="Accueil ALEK Artisan" className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-600 text-2xl font-black text-white">A</Link>
             <div>
