@@ -35,7 +35,7 @@ function Footer() {
 export default function PricingPage() {
   return (
     <main className="min-h-screen bg-[#f5f7fc] px-4 py-10 text-[#14213b]">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <header className="rounded-[30px] border border-white/10 bg-[#101c34] p-7 text-white shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
           <div className="flex items-center gap-4">
             <Link href="/" aria-label="Accueil ALEK Artisan" className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-600 text-2xl font-black text-white">A</Link>
@@ -44,7 +44,7 @@ export default function PricingPage() {
               <p className="mt-1 text-blue-100">Devis, factures et gestion documentaire pour toutes les entreprises.</p>
             </div>
           </div>
-          <p className="mt-6 max-w-3xl leading-7 text-slate-200">
+          <nav aria-label="Navigation principale" className="mt-7 flex flex-wrap gap-3 text-sm font-semibold"><Link href="/" className="rounded-xl border border-white/25 px-4 py-2 text-white hover:bg-white/10">Accueil</Link><Link href="/a-propos" className="rounded-xl border border-white/25 px-4 py-2 text-white hover:bg-white/10">À propos</Link><Link href="/login" className="rounded-xl bg-blue-600 px-4 py-2 text-white hover:bg-blue-500">Mon espace →</Link></nav><p className="mt-6 max-w-3xl leading-7 text-slate-200">
             ALEK accompagne les indépendants, artisans, commerces, associations, TPE, PME et grandes entreprises dans la préparation de devis et de factures. Les fonctionnalités avancées destinées aux équipes sont en cours de développement.
           </p>
         </header>
