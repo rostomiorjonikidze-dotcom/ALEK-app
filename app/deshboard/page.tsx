@@ -239,13 +239,13 @@ const translations = {
   },
   fr: {
     appName: "ALEK 🇫🇷",
-    subtitle: "Décrivez les travaux dans votre langue et créez un Devis ou une Facture professionnelle en français.",
+    subtitle: "Créez des devis et factures professionnels en français.",
     siteLanguage: "Langue du site",
     inputLanguage: "Langue de description",
     workDescription: "Décrivez les travaux effectués",
     placeholder: "Ex. : 10 heures de peinture à 35€/h, peinture 120€ au total...",
-    prepareFrench: "Préparer en français",
-    frenchText: "Texte en français",
+    prepareFrench: "Préparer les prestations avec l’IA",
+    frenchText: "Prestations préparées",
     frenchPlaceholder: "Le texte professionnel apparaîtra ici...",
     currentPlan: "Abonnement actuel",
     used: "Utilisé",
@@ -486,8 +486,8 @@ function serviceTotal(item: ServiceItem) {
 }
 
 export default function Home() {
-  const [siteLang, setSiteLang] = useState<Lang>("ka");
-  const [inputLang, setInputLang] = useState<Lang>("ka");
+  const [siteLang, setSiteLang] = useState<Lang>("fr");
+  const [inputLang, setInputLang] = useState<Lang>("fr");
   const t = translations[siteLang];
 
   const [description, setDescription] = useState("");
@@ -1102,8 +1102,8 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
   const navButton = "w-full rounded-xl px-4 py-3 text-left font-medium text-stone-600 transition hover:bg-[#f8efe5]";
 
   return (
-    <main dir={siteLang === "ar" ? "rtl" : "ltr"} className="min-h-screen bg-gradient-to-br from-[#fff8f0] via-[#fffdf9] to-[#f8efe5] text-stone-900">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:pl-72">
+    <main dir="ltr" className="min-h-screen bg-gradient-to-br from-[#fff8f0] via-[#fffdf9] to-[#f8efe5] text-stone-900">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:pl-72"><div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Facturation électronique 2026–2027 :</strong> les factures PDF classiques ne remplacent pas les factures électroniques réglementaires. Pour les échanges B2B concernés, une plateforme agréée est nécessaire. Vérifiez les mentions obligatoires avant émission.</div>
         <aside className="fixed bottom-6 left-6 top-6 hidden w-60 overflow-y-auto rounded-[28px] border border-orange-100/80 bg-[#fffdf9]/95 p-4 shadow-[0_18px_50px_rgba(120,72,24,0.10)] backdrop-blur lg:block">
           <div className="mb-7 flex items-center gap-3 px-2">
             <img src="/alek-logo.png" alt="ALEK" className="h-11 w-11 rounded-xl object-cover" />
@@ -1140,7 +1140,7 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
           <div className="min-w-[180px]">
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-stone-500">{t.siteLanguage}</label>
             <select value={siteLang} onChange={(e) => setSiteLang(e.target.value as Lang)} className="w-full rounded-xl border border-orange-100 bg-[#fff9f3] px-4 py-3 text-sm font-medium outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100">
-              {(Object.keys(languageNames) as Lang[]).map((lang) => <option key={lang} value={lang}>{languageNames[lang]}</option>)}
+              <option value="fr">Français</option>
             </select>
           </div>
         </div>
@@ -1175,7 +1175,7 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
             <h2 className="mt-1 text-2xl font-extrabold">{t.workDescription}</h2>
             <label className="mb-2 mt-5 block text-sm font-semibold text-stone-700">{t.inputLanguage}</label>
             <select value={inputLang} onChange={(e) => setInputLang(e.target.value as Lang)} className="w-full rounded-xl border border-orange-100 bg-[#fff9f3] px-4 py-3 outline-none focus:border-amber-500">
-              {(Object.keys(languageNames) as Lang[]).map((lang) => <option key={lang} value={lang}>{languageNames[lang]}</option>)}
+              <option value="fr">Français</option>
             </select>
             <textarea dir={inputLang === "ar" ? "rtl" : "ltr"} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t.placeholder} className="mt-4 h-40 w-full resize-none rounded-2xl border border-orange-100 bg-[#fff9f3] p-4 outline-none focus:border-amber-500 focus:bg-[#fffdf9]" />
             <button type="button" onClick={prepareFrenchText} className="mt-4 w-full rounded-2xl bg-amber-600 px-5 py-4 font-bold text-white hover:bg-amber-700">✨ {t.prepareFrench}</button>
