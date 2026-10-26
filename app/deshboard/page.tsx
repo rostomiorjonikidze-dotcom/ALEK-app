@@ -926,7 +926,7 @@ export default function Home() {
   }
 
   async function saveDocumentToDatabase() {
-    if (savingDocument) return;
+    if (savingDocument || !validateDocument()) return;
     setSavingDocument(true);
     try {
     const { data: authData } = await supabase.auth.getUser();
@@ -1002,134 +1002,145 @@ export default function Home() {
     await loadDocuments();
   }
 
+  function validateDocument(): boolean {
+    if (!clientName.trim()) {
+      alert("Renseignez le nom du client avant de continuer.");
+      scrollToSection("client-section");
+      return false;
+    }
+    if (!businessName.trim() || !businessSiret.trim()) {
+      alert("Renseignez le nom de votre entreprise et votre SIRET.");
+      scrollToSection("settings-section");
+      return false;
+    }
+    if (!services.length || services.some(item => !item.description.trim() || !Number.isFinite(item.price) || item.price < 0)) {
+      alert("Ajoutez au moins une prestation avec une description et un prix valide.");
+      scrollToSection("services-section");
+      return false;
+    }
+    if (!(documentType === "facture" ? invoiceNumber : devisNumber).trim()) {
+      alert("Renseignez le numéro du document.");
+      scrollToSection("settings-section");
+      return false;
+    }
+    return true;
+  }
+
   function createPdf() {
+    if (!validateDocument()) return;
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const left = 18;
+    const right = pageWidth - 18;
+    const safe = (value: string | null | undefined) => String(value || "—").replace(/[\r\n]+/g, " ");
+    const number = documentType === "facture" ? invoiceNumber : devisNumber;
+    const date = documentType === "facture" ? invoiceDate : devisDate;
+    const due = documentType === "facture" ? invoiceDueDate : validUntil;
+    const textBlock = (label: string, value: string, x: number, y: number, width: number) => {
+      doc.setFont("helvetica", "bold");
+      doc.text(label, x, y);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(safe(value), width) as string[];
+      doc.text(lines, x, y + 6);
+      return y + 6 + lines.length * 5;
+    };
+    doc.setFillColor(15, 35, 71);
+    doc.rect(0, 0, pageWidth, 37, "F");
+    doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(24);
-    doc.text(documentType === "facture" ? "FACTURE" : "DEVIS", 105, 25, { align: "center" });
-    doc.setDrawColor(0, 125, 220);
-    doc.setLineWidth(0.8);
-    doc.line(75, 31, 135, 31);
-
+    doc.setFontSize(21);
+    doc.text(documentType === "facture" ? "FACTURE" : "DEVIS", left, 22);
     doc.setFontSize(10);
-    doc.text("N° :", 20, 44);
-    doc.text("Date :", 20, 51);
-    doc.text(documentType === "devis" ? "Valable jusqu'au :" : "Date d'échéance :", 20, 58);
+    doc.text(safe(number), right, 22, { align: "right" });
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(documentType === "facture" ? invoiceNumber || "-" : devisNumber || "-", 55, 44);
-    doc.text(documentType === "facture" ? invoiceDate || "-" : devisDate || "-", 55, 51);
-    doc.text(documentType === "facture" ? invoiceDueDate || "-" : validUntil || "-", 55, 58);
+    doc.text(`Date : ${safe(date)}`, left, 46);
+    doc.text(`${documentType === "facture" ? "Échéance" : "Valable jusqu'au"} : ${safe(due)}`, left, 53);
+    if (documentType === "facture" && devisReference) doc.text(`Référence devis : ${safe(devisReference)}`, left, 60);
 
-    if (documentType === "facture" && devisReference) {
-      doc.text(`Référence devis : ${devisReference}`, 20, 65);
+    doc.setFillColor(245, 248, 253);
+    doc.roundedRect(left, 66, 84, 55, 2, 2, "F");
+    doc.roundedRect(108, 66, 84, 55, 2, 2, "F");
+    doc.setFontSize(9);
+    let companyY = textBlock("ÉMETTEUR", businessName, left + 4, 73, 75);
+    for (const line of [businessAddress, businessPhone, businessEmail, `SIRET : ${safe(businessSiret)}`]) {
+      if (companyY > 115) break;
+      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
+      doc.text(wrapped, left + 4, companyY);
+      companyY += wrapped.length * 4.5;
+    }
+    let clientY = textBlock("CLIENT", clientName, 112, 73, 75);
+    for (const line of [clientAddress, clientPhone, clientEmail]) {
+      if (clientY > 115) break;
+      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
+      doc.text(wrapped, 112, clientY);
+      clientY += wrapped.length * 4.5;
     }
 
-   const businessNameLines = doc.splitTextToSize(
-  `Entreprise: ${businessName || "-"}`,
-  70
-);
-
-const businessBoxHeight = 38 + (businessNameLines.length - 1) * 7;
-
-doc.setFillColor(238, 246, 255);
-doc.roundedRect(15, 72, 80, businessBoxHeight, 2, 2, "F");
-doc.roundedRect(105, 72, 90, 31, 2, 2, "F");
-
-doc.setFont("helvetica", "bold");
-doc.text(businessNameLines, 20, 79);
-
-const businessInfoY = 79 + businessNameLines.length * 7;
-doc.setFont("helvetica", "normal");
-doc.text(`Adresse: ${businessAddress || "-"}`, 20, businessInfoY);
-doc.text(`Téléphone: ${businessPhone || "-"}`, 20, businessInfoY + 7);
-doc.text(`E-mail: ${businessEmail || "-"}`, 20, businessInfoY + 14);
-doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
-  
-
-    doc.text(`Client: ${clientName || "-"}`, 110, 79);
-    doc.setFont("helvetica", "normal");
-    
-    doc.text(`Adresse: ${clientAddress || "-"}`, 110, 86);
-    doc.text(`Téléphone: ${clientPhone || "-"}`, 110, 93);
-    doc.text(`E-mail: ${clientEmail || "-"}`, 110, 100);
-
+    const descriptionLines = doc.splitTextToSize(safe(frenchText), 174) as string[];
+    let descriptionY = 133;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("Description des travaux", 20, 122);
+    doc.setFontSize(11);
+    doc.text("Description des travaux", left, descriptionY);
+    descriptionY += 7;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-
-    const lines = doc.splitTextToSize(frenchText || "-", 170) as string[];
-    let y = 130;
-    for (const line of lines) {
-      if (y > 275) {
-        doc.addPage();
-        y = 20;
-      }
-      doc.text(line, 20, y);
-      y += 5;
+    doc.setFontSize(9);
+    for (const line of descriptionLines) {
+      if (descriptionY > pageHeight - 32) { doc.addPage(); descriptionY = 24; }
+      doc.text(line, left, descriptionY);
+      descriptionY += 4.5;
     }
-
-    if (y + 18 > 275) {
-      doc.addPage();
-      y = 20;
-    }
+    if (descriptionY > pageHeight - 40) { doc.addPage(); descriptionY = 24; }
 
     autoTable(doc, {
-      startY: y + 4,
-      head: [["Description", "Qté / Heures", "Prix", "Total"]],
-      body: services.map((service) => [
-        service.description || "-",
-        service.priceType === "hourly" ? `${service.hours} h` : String(service.quantity),
-        service.priceType === "hourly" ? `${service.price.toFixed(2)} EUR/h` : `${service.price.toFixed(2)} EUR`,
-        `${serviceTotal(service).toFixed(2)} EUR`,
+      startY: descriptionY + 6,
+      margin: { left, right: 18, top: 20, bottom: 22 },
+      head: [["Description", "Qté / Heures", "Prix unitaire", "Total HT"]],
+      body: services.map(item => [
+        safe(item.description),
+        item.priceType === "hourly" ? `${item.hours} h` : String(item.quantity),
+        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : ""}`,
+        `${serviceTotal(item).toFixed(2)} EUR`,
       ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [0, 125, 220] },
+      styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+      headStyles: { fillColor: [27, 72, 144] },
+      alternateRowStyles: { fillColor: [246, 249, 253] },
+      columnStyles: { 0: { cellWidth: 78 }, 1: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 34 } },
     });
-
-    let finalY = ((doc as any).lastAutoTable?.finalY || y) + 10;
-    if (finalY > 240) {
-      doc.addPage();
-      finalY = 20;
-    }
-
-    doc.setFontSize(11);
-    doc.text(`Total HT: ${totalHT.toFixed(2)} EUR`, 20, finalY);
-    doc.text(`TVA (${vatRate}%): ${vatAmount.toFixed(2)} EUR`, 20, finalY + 8);
-    doc.setFillColor(230, 242, 255);
-    doc.rect(20, finalY + 12, 170, 14, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(`Total TTC: ${totalTTC.toFixed(2)} EUR`, 25, finalY + 22);
-    doc.setFont("helvetica", "normal");
+    let y = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? descriptionY) + 12;
+    if (y + 65 > pageHeight - 18) { doc.addPage(); y = 25; }
     doc.setFontSize(10);
-
-    if (documentType === "facture") {
-      let infoY = finalY + 38;
-      if (infoY > 275) { doc.addPage(); infoY = 20; }
-      if (paymentTerms) {
-        const termsLines = doc.splitTextToSize(`Conditions de paiement : ${paymentTerms}`, 170) as string[];
-        if (infoY + termsLines.length * 6 > 275) { doc.addPage(); infoY = 20; }
-        doc.text(termsLines, 20, infoY);
-        infoY += (termsLines.length - 1) * 6;
-        infoY += 7;
-      }
-      if (paymentMethod) {
-        if (infoY > 270) { doc.addPage(); infoY = 20; }
-        doc.text(`Mode de paiement : ${paymentMethod}`, 20, infoY);
-        infoY += 7;
-      }
-      const statusText = invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée";
-      if (infoY > 275) { doc.addPage(); infoY = 20; }
-      doc.text(`Statut : ${statusText}`, 20, infoY);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total HT : ${totalHT.toFixed(2)} EUR`, right, y, { align: "right" });
+    doc.text(`TVA (${vatRate} %) : ${vatAmount.toFixed(2)} EUR`, right, y + 8, { align: "right" });
+    doc.setFillColor(231, 240, 255);
+    doc.roundedRect(92, y + 13, 100, 16, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, right - 4, y + 24, { align: "right" });
+    y += 40;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const details = documentType === "facture"
+      ? [paymentTerms && `Conditions de paiement : ${paymentTerms}`, paymentMethod && `Mode de paiement : ${paymentMethod}`, `Statut : ${invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée"}`].filter(Boolean) as string[]
+      : [];
+    for (const detail of details) {
+      const lines = doc.splitTextToSize(detail, 170) as string[];
+      if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
+      doc.text(lines, left, y);
+      y += lines.length * 5 + 3;
     }
-
-    doc.save(
-      documentType === "facture"
-        ? `ALEK-Facture-${invoiceNumber || "nouvelle"}.pdf`
-        : `ALEK-Devis-${devisNumber || "nouveau"}.pdf`,
-    );
+    const pageCount = doc.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page++) {
+      doc.setPage(page);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 122, 140);
+      doc.text(`ALEK Artisan · ${page} / ${pageCount}`, right, pageHeight - 10, { align: "right" });
+    }
+    doc.save(`ALEK-${documentType === "facture" ? "Facture" : "Devis"}-${safe(number).replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`);
   }
 
   const navButton = "w-full rounded-xl px-4 py-3 text-left font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400";
