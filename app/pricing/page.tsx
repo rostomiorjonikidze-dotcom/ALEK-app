@@ -15,15 +15,15 @@ const legalLinks = [
 
 function Footer() {
   return (
-    <footer className="mt-12 border-t border-orange-100 pt-7 text-sm text-stone-600">
+    <footer className="mt-12 border-t border-blue-100 pt-7 text-sm text-slate-600">
       <div className="flex flex-wrap justify-center gap-x-5 gap-y-3">
         {legalLinks.map((link) => (
-          <a key={link.href} href={link.href} className="hover:text-amber-700">
+          <a key={link.href} href={link.href} className="hover:text-blue-700">
             {link.label}
           </a>
         ))}
       </div>
-      <p className="mt-5 text-center text-xs text-stone-500">
+      <p className="mt-5 text-center text-xs text-slate-500">
         © {new Date().getFullYear()} ALEK. Tous droits réservés.
       </p>
     </footer>
@@ -33,14 +33,14 @@ function Footer() {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#fff8f0] via-[#fffdf9] to-[#f8efe5] px-4 py-10 text-stone-900">
+    <main className="min-h-screen bg-gradient-to-br from-[#eef4ff] via-white to-[#f5f8ff] px-4 py-10 text-slate-900">
       <div className="mx-auto max-w-5xl">
-        <header className="rounded-[30px] border border-orange-100 bg-[#fffdf9]/95 p-7 shadow-[0_18px_50px_rgba(120,72,24,0.10)]">
+        <header className="rounded-[30px] border border-blue-100 bg-white/95 p-7 shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
           <div className="flex items-center gap-4">
             <img src="/alek-logo.png" alt="ALEK" className="h-14 w-14 rounded-2xl object-cover" />
             <div>
               <p className="text-3xl font-black tracking-wide">ALEK</p>
-              <p className="mt-1 text-stone-600">Devis, factures et gestion documentaire pour toutes les entreprises.</p>
+              <p className="mt-1 text-slate-600">Devis, factures et gestion documentaire pour toutes les entreprises.</p>
             </div>
           </div>
           <p className="mt-6 max-w-3xl leading-7 text-stone-700">
@@ -55,7 +55,7 @@ export default function PricingPage() {
             ["Business", "19,99 € / mois", "IA illimitée", "Devis et factures illimités"],
             ["Entreprise", "Sur devis", "Fonctions multi-utilisateurs à venir", "Contactez-nous pour vos besoins"],
           ].map(([name, price, ai, docs]) => (
-            <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-amber-400 bg-amber-50/70 shadow-[0_12px_30px_rgba(217,119,6,0.12)]" : "border-orange-100 bg-[#fffdf9]"}`}>
+            <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-amber-400 bg-amber-50/70 shadow-[0_12px_30px_rgba(217,119,6,0.12)]" : "border-blue-100 bg-white"}`}>
               <h2 className="text-xl font-bold">{name}</h2>
               <p className="mt-3 text-3xl font-black">{price}</p>
               <p className="mt-5 text-sm text-stone-700">✓ {ai}</p>
@@ -66,7 +66,7 @@ export default function PricingPage() {
           ))}
         </section>
 
-        <section className="mt-7 rounded-3xl border border-orange-100 bg-[#fffdf9] p-7">
+        <section className="mt-7 rounded-3xl border border-blue-100 bg-white p-7">
           <h2 className="text-2xl font-bold">Fonctionnalités principales</h2>
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <p>✨ Assistant IA pour structurer les prestations en français</p>
@@ -80,23 +80,23 @@ export default function PricingPage() {
           </div>
         </section>
 
-        <section className="mt-7 rounded-3xl border border-orange-100 bg-[#fffdf9] p-7">
+        <section className="mt-7 rounded-3xl border border-blue-100 bg-white p-7">
           <h2 className="text-2xl font-bold">Abonnements et paiement</h2>
           <p className="mt-4 leading-7 text-stone-700">
             Les abonnements payants sont mensuels et se renouvellent automatiquement jusqu’à leur résiliation.
             Les modalités de paiement sont précisées lors de la souscription. Les fonctionnalités Entreprise et les intégrations de facturation électronique ne sont pas encore disponibles.
           </p>
-          <p className="mt-3 text-sm text-stone-600">
+          <p className="mt-3 text-sm text-slate-600">
             Vous pouvez consulter les règles d’annulation et de remboursement sur notre page dédiée.
           </p>
         </section>
 
         <section className="mt-7 rounded-3xl border border-blue-100 bg-blue-50 p-7"><h2 className="text-2xl font-bold">Facturation électronique en France</h2><p className="mt-3 leading-7 text-stone-700">La réforme 2026–2027 impose progressivement la réception et l’émission de factures électroniques selon les catégories d’entreprises. Un PDF ordinaire ne constitue pas une facture électronique réglementaire. La connexion à une plateforme agréée et les échanges structurés sont en préparation et ne sont pas encore proposés par ALEK.</p></section>
 
-        <section className="mt-7 rounded-3xl border border-orange-100 bg-[#fffdf9] p-7">
+        <section className="mt-7 rounded-3xl border border-blue-100 bg-white p-7">
           <h2 className="text-2xl font-bold">Besoin d’aide ?</h2>
           <p className="mt-3 text-stone-700">
-            Contact : <a className="font-semibold text-amber-700 underline" href={`mailto:${LEGAL.supportEmail}`}>{LEGAL.supportEmail}</a>
+            Contact : <a className="font-semibold text-blue-700 underline" href={`mailto:${LEGAL.supportEmail}`}>{LEGAL.supportEmail}</a>
           </p>
         </section>
 
