@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import Link from "next/link";
+import InstallApp from "../components/InstallApp";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -1102,8 +1104,8 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
   const navButton = "w-full rounded-xl px-4 py-3 text-left font-medium text-stone-600 transition hover:bg-[#f8efe5]";
 
   return (
-    <main dir="ltr" className="min-h-screen bg-gradient-to-br from-[#fff8f0] via-[#fffdf9] to-[#f8efe5] text-stone-900">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:pl-72"><div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Facturation électronique 2026–2027 :</strong> les factures PDF classiques ne remplacent pas les factures électroniques réglementaires. Pour les échanges B2B concernés, une plateforme agréée est nécessaire. Vérifiez les mentions obligatoires avant émission.</div>
+    <main dir="ltr" className="min-h-screen overflow-x-hidden bg-gradient-to-br from-[#f3f8ff] via-white to-[#f7faff] text-slate-900">
+      <div className="mx-auto max-w-7xl px-3 pb-24 pt-4 sm:px-6 sm:py-6 lg:pl-72"><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white/90 px-4 py-3 shadow-sm"><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ALEK ARTISAN</p><p className="text-sm text-slate-600">Votre espace professionnel</p></div><div className="flex flex-wrap items-center gap-2"><Link href="/a-propos" className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50">À propos</Link><InstallApp /></div></div><div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Facturation électronique 2026–2027 :</strong> les factures PDF classiques ne remplacent pas les factures électroniques réglementaires. Pour les échanges B2B concernés, une plateforme agréée est nécessaire. Vérifiez les mentions obligatoires avant émission.</div>
         <aside className="fixed bottom-6 left-6 top-6 hidden w-60 overflow-y-auto rounded-[28px] border border-orange-100/80 bg-[#fffdf9]/95 p-4 shadow-[0_18px_50px_rgba(120,72,24,0.10)] backdrop-blur lg:block">
           <div className="mb-7 flex items-center gap-3 px-2">
             <img src="/alek-logo.png" alt="ALEK" className="h-11 w-11 rounded-xl object-cover" />
