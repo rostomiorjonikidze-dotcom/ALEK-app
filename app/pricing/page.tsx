@@ -1,6 +1,7 @@
 "use client";
 
 import { LEGAL } from "../legal-config";
+import Link from "next/link";
 
 
 const legalLinks = [
@@ -33,17 +34,17 @@ function Footer() {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#eef4ff] via-white to-[#f5f8ff] px-4 py-10 text-slate-900">
+    <main className="min-h-screen bg-[#f5f7fc] px-4 py-10 text-[#14213b]">
       <div className="mx-auto max-w-5xl">
-        <header className="rounded-[30px] border border-blue-100 bg-white/95 p-7 shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
+        <header className="rounded-[30px] border border-white/10 bg-[#101c34] p-7 text-white shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
           <div className="flex items-center gap-4">
-            <img src="/alek-logo.png" alt="ALEK" className="h-14 w-14 rounded-2xl object-cover" />
+            <Link href="/" aria-label="Accueil ALEK Artisan" className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-600 text-2xl font-black text-white">A</Link>
             <div>
               <p className="text-3xl font-black tracking-wide">ALEK</p>
-              <p className="mt-1 text-slate-600">Devis, factures et gestion documentaire pour toutes les entreprises.</p>
+              <p className="mt-1 text-blue-100">Devis, factures et gestion documentaire pour toutes les entreprises.</p>
             </div>
           </div>
-          <p className="mt-6 max-w-3xl leading-7 text-stone-700">
+          <p className="mt-6 max-w-3xl leading-7 text-slate-200">
             ALEK accompagne les indépendants, artisans, commerces, associations, TPE, PME et grandes entreprises dans la préparation de devis et de factures. Les fonctionnalités avancées destinées aux équipes sont en cours de développement.
           </p>
         </header>
@@ -55,7 +56,7 @@ export default function PricingPage() {
             ["Business", "19,99 € / mois", "IA illimitée", "Devis et factures illimités"],
             ["Entreprise", "Sur devis", "Fonctions multi-utilisateurs à venir", "Contactez-nous pour vos besoins"],
           ].map(([name, price, ai, docs]) => (
-            <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-amber-400 bg-amber-50/70 shadow-[0_12px_30px_rgba(217,119,6,0.12)]" : "border-blue-100 bg-white"}`}>
+            <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-blue-500 bg-blue-50 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : "border-blue-100 bg-white"}`}>
               <h2 className="text-xl font-bold">{name}</h2>
               <p className="mt-3 text-3xl font-black">{price}</p>
               <p className="mt-5 text-sm text-stone-700">✓ {ai}</p>
@@ -100,7 +101,7 @@ export default function PricingPage() {
           </p>
         </section>
 
-        <Footer />
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4"><Link href="/login" className="rounded-xl bg-blue-600 px-7 py-4 font-bold text-white hover:bg-blue-700">Commencer gratuitement →</Link><Link href="/" className="rounded-xl border border-blue-200 px-7 py-4 font-bold text-blue-700 hover:bg-blue-50">Retour à l’accueil</Link></div><Footer />
       </div>
     </main>
   );

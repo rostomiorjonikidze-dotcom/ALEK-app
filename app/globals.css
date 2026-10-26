@@ -74,3 +74,8 @@ input, select, textarea { max-width: 100%; }
   .alek-premium-dashboard h1 { font-size:clamp(1.55rem,6vw,2.1rem); }
   .alek-premium-dashboard #alek-live-preview { grid-template-columns:minmax(0,1fr); }
 }
+
+/* ALEK Artisan unified public and workspace interaction tokens */
+:root { color-scheme: light; --alek-surface: #ffffff; --alek-soft: #f5f7fc; --alek-accent: #2563eb; --alek-radius: 1.25rem; }
+:where(button,a,input,textarea,select):focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *,*::before,*::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
