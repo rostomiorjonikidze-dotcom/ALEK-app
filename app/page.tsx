@@ -1,5 +1,5 @@
-import SiteHeader from "./components/SiteHeader";
 "use client";
+import SiteHeader from "./components/SiteHeader";
 import Link from "next/link";
 const features=[
 {icon:"✦",title:"Assistant IA",text:"Décrivez une prestation et préparez un contenu professionnel en français."},
