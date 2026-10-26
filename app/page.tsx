@@ -64,6 +64,7 @@ export default function HomePage() {
           "linear-gradient(135deg, #f7fbff 0%, #eef6ff 45%, #ffffff 100%)",
         color: "#10233f",
         fontFamily: "Arial, Helvetica, sans-serif",
+        overflowX: "hidden",
       }}
     >
       <header
@@ -149,9 +150,9 @@ export default function HomePage() {
         style={{
           maxWidth: 1180,
           margin: "0 auto",
-          padding: "70px 24px 40px",
+          padding: "clamp(36px,7vw,90px) 24px 50px",
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
           gap: 50,
           alignItems: "center",
         }}
@@ -174,7 +175,7 @@ export default function HomePage() {
 
           <h1
             style={{
-              fontSize: "clamp(42px, 7vw, 72px)",
+              fontSize: "clamp(36px, 7vw, 72px)",
               lineHeight: 1.04,
               margin: 0,
               letterSpacing: "-2px",
@@ -244,8 +245,9 @@ export default function HomePage() {
             background: "#ffffff",
             border: "1px solid #e5edf6",
             borderRadius: 24,
-            padding: 30,
+            padding: "clamp(18px,4vw,30px)",
             boxShadow: "0 25px 70px rgba(27, 67, 110, 0.12)",
+            minWidth:0,
           }}
         >
           <div
@@ -387,7 +389,7 @@ export default function HomePage() {
             color: "#fff",
           }}
         >
-          <h2 style={{ fontSize: 38, margin: 0 }}>{t.ctaTitle}</h2>
+          <h2 style={{ fontSize: "clamp(26px,5vw,38px)", margin: 0 }}>{t.ctaTitle}</h2>
 
           <p
             style={{
