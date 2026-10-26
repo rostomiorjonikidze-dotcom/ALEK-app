@@ -85,3 +85,8 @@ input, select, textarea { max-width: 100%; }
 #alek-live-preview textarea,#client-section input,#services-section input,#settings-section input { transition: border-color .15s ease, box-shadow .15s ease; }
 #alek-live-preview textarea:focus,#client-section input:focus,#services-section input:focus,#settings-section input:focus { box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
 @media(max-width:640px){ #alek-live-preview section { min-width:0; } #alek-live-preview textarea { max-width:100%; } }
+
+/* Shared public navigation and accessible compact mobile menu */
+summary::-webkit-details-marker { display: none; }
+header [aria-current="page"] { font-weight: 800; }
+@media (max-width: 767px) { header nav[aria-label="Navigation mobile"] a { display: block; } }
