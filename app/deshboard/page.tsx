@@ -1070,6 +1070,11 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
       y += 5;
     }
 
+    if (y + 18 > 275) {
+      doc.addPage();
+      y = 20;
+    }
+
     autoTable(doc, {
       startY: y + 4,
       head: [["Description", "Qté / Heures", "Prix", "Total"]],
@@ -1102,15 +1107,21 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
 
     if (documentType === "facture") {
       let infoY = finalY + 38;
+      if (infoY > 275) { doc.addPage(); infoY = 20; }
       if (paymentTerms) {
-        doc.text(`Conditions de paiement : ${paymentTerms}`, 20, infoY);
+        const termsLines = doc.splitTextToSize(`Conditions de paiement : ${paymentTerms}`, 170) as string[];
+        if (infoY + termsLines.length * 6 > 275) { doc.addPage(); infoY = 20; }
+        doc.text(termsLines, 20, infoY);
+        infoY += (termsLines.length - 1) * 6;
         infoY += 7;
       }
       if (paymentMethod) {
+        if (infoY > 270) { doc.addPage(); infoY = 20; }
         doc.text(`Mode de paiement : ${paymentMethod}`, 20, infoY);
         infoY += 7;
       }
       const statusText = invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée";
+      if (infoY > 275) { doc.addPage(); infoY = 20; }
       doc.text(`Statut : ${statusText}`, 20, infoY);
     }
 
