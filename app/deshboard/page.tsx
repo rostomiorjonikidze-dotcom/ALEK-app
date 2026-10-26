@@ -929,16 +929,16 @@ export default function Home() {
     if (savingDocument || !validateDocument()) return;
     setSavingDocument(true);
     try {
-    const { data: authData } = await supabase.auth.getUser();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
     const user = authData.user;
-    if (!user) {
+    if (authError || !user) {
       alert(t.loginRequired);
       return;
     }
 
     const payload = buildPayload(user.id);
     const query = selectedDocumentId
-      ? supabase.from("documents").update(payload).eq("id", selectedDocumentId).select("*").single()
+      ? supabase.from("documents").update(payload).eq("id", selectedDocumentId).eq("user_id", user.id).select("*").single()
       : supabase.from("documents").insert(payload).select("*").single();
 
     const { data, error } = await query;
@@ -951,6 +951,9 @@ export default function Home() {
     if (data?.id) setSelectedDocumentId(data.id);
     await loadDocuments();
     alert(t.saveSuccess);
+    } catch (error) {
+      console.error("Document save failed:", error);
+      alert(t.saveError);
     } finally {
       setSavingDocument(false);
     }
@@ -993,7 +996,9 @@ export default function Home() {
 
   async function deleteSavedDocument(id: string) {
     if (!window.confirm(`${t.delete}?`)) return;
-    const { error } = await supabase.from("documents").delete().eq("id", id);
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) { alert(t.loginRequired); return; }
+    const { error } = await supabase.from("documents").delete().eq("id", id).eq("user_id", authData.user.id);
     if (error) {
       alert(error.message);
       return;
