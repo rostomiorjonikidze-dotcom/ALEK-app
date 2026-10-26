@@ -1124,7 +1124,7 @@ doc.text(`SIRET: ${businessSiret || "-"}`, 20, businessInfoY + 21);
           {label:"Devis enregistrés",value:String(quoteDocs.length)},
           {label:"Factures à encaisser",value:money(outstandingRevenue)},
           {label:"Total clients",value:String(clientCount)}
-        ].map(item=><div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"><p className="text-xs font-medium text-slate-500 sm:text-sm">{item.label}</p><p className="mt-3 break-words text-xl font-black text-[#14213b] sm:text-2xl">{item.value}</p></div>)}</div>
+        ].map(item=><div key={item.label} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md sm:p-5"><div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 to-indigo-400 opacity-0 transition group-hover:opacity-100" /><p className="text-xs font-medium text-slate-500 sm:text-sm">{item.label}</p><p className="mt-3 break-words text-xl font-black text-[#14213b] sm:text-2xl">{item.value}</p></div>)}</div>
         <section aria-label="Vue d’ensemble de l’activité" className="mb-6 grid gap-5 xl:grid-cols-[1.65fr_1fr]">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Vue d’ensemble</p><h2 className="mt-1 text-xl font-black text-[#14213b]">Activité des documents</h2></div><span className="rounded-full bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">Données enregistrées</span></div>

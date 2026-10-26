@@ -1,3 +1,4 @@
+import SiteHeader from "../components/SiteHeader";
 "use client";
 
 import { LEGAL } from "../legal-config";
@@ -34,7 +35,9 @@ function Footer() {
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-[#f5f7fc] px-4 py-10 text-[#14213b]">
+    <main className="min-h-screen bg-[#f5f7fc] text-[#14213b]">
+      <SiteHeader />
+      <div className="px-4 py-10">
       <div className="mx-auto max-w-6xl">
         <header className="rounded-[30px] border border-white/10 bg-[#101c34] p-7 text-white shadow-[0_18px_50px_rgba(22,55,110,0.10)]">
           <div className="flex items-center gap-4">
@@ -102,6 +105,7 @@ export default function PricingPage() {
         </section>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4"><Link href="/login" className="rounded-xl bg-blue-600 px-7 py-4 font-bold text-white hover:bg-blue-700">Commencer gratuitement →</Link><Link href="/" className="rounded-xl border border-blue-200 px-7 py-4 font-bold text-blue-700 hover:bg-blue-50">Retour à l’accueil</Link></div><Footer />
+      </div>
       </div>
     </main>
   );
