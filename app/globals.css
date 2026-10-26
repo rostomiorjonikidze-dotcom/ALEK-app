@@ -132,3 +132,25 @@ header [aria-current="page"] { font-weight: 800; }
   .alek-premium-dashboard .alek-editor-steps button { padding-inline: 2px; font-size: 9px; }
   .alek-premium-dashboard #alek-live-preview { gap: 12px; }
 }
+
+/* ALEK ARTISAN — premium visual system */
+:root { --alek-navy:#07172c; --alek-blue:#346cf4; --alek-border:#e1e7f2; --background:#f3f6fb; }
+body { font-family: Arial, Helvetica, sans-serif; }
+.alek-premium-dashboard { background:radial-gradient(ellipse at 78% 0%,#e6efff 0%,transparent 48%),#f3f6fb; }
+.alek-premium-dashboard :is(.rounded-xl,.rounded-2xl,.rounded-3xl) { transition: box-shadow .25s ease,transform .25s ease,border-color .25s ease; }
+.alek-premium-dashboard :is(article,section) > .rounded-2xl:hover { border-color:#c7d7f8; }
+.alek-premium-dashboard :is(input,select,textarea) { border-radius:12px; border-color:#d9e3f3; background:#fff; }
+.alek-premium-dashboard :is(input,select,textarea):focus { outline:2px solid #8fb3ff; outline-offset:1px; }
+.alek-premium-dashboard button:not(:disabled):active { transform:scale(.985); }
+.alek-premium-dashboard #alek-live-preview { box-shadow:0 24px 70px rgba(19,41,81,.10); }
+.alek-premium-dashboard #alek-live-preview :is(h1,h2,h3) { letter-spacing:-.025em; }
+.alek-premium-dashboard :is(#client-section,#services-section,#settings-section) { scroll-margin-top:90px; }
+.alek-premium-dashboard .alek-editor-steps { border:1px solid #e1e9f7; border-radius:18px; box-shadow:0 12px 35px rgba(23,53,104,.06); }
+.alek-premium-dashboard :is(button,a):focus-visible { outline:3px solid #79a5ff; outline-offset:3px; }
+@media(min-width:1024px) {
+ .alek-premium-dashboard #alek-live-preview { border-radius:26px; }
+}
+@media(prefers-reduced-motion:no-preference) {
+ @keyframes alek-enter { from {opacity:0;transform:translateY(12px)} to {opacity:1;transform:translateY(0)} }
+ .alek-premium-dashboard #alek-live-preview { animation:alek-enter .45s ease-out both; }
+}
