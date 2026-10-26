@@ -331,7 +331,7 @@ export default function LoginPage() {
       dir={lang === "ar" ? "rtl" : "ltr"}
       style={{
         minHeight: "100vh",
-        background: "#f3f6fb",
+        background: "radial-gradient(circle at 15% 20%, #244e91 0%, transparent 45%), linear-gradient(140deg, #0c1830, #152d55)",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
@@ -344,7 +344,7 @@ export default function LoginPage() {
           width: "100%",
           maxWidth: "520px",
           background: "#ffffff",
-          borderRadius: "22px",
+          borderRadius: "28px",
           padding: "32px",
           boxShadow: "0 16px 45px rgba(15, 36, 70, 0.12)",
         }}
