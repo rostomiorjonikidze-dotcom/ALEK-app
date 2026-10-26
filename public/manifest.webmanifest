@@ -1,0 +1,19 @@
+{
+  "name": "ALEK Artisan — Devis & Factures",
+  "short_name": "ALEK Artisan",
+  "description": "Devis et factures pour les professionnels en France",
+  "lang": "fr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1677e8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
