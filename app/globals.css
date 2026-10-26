@@ -52,3 +52,8 @@ input, select, textarea { max-width: 100%; }
  .alek-premium-dashboard section[id] { padding: 16px; }
  .alek-premium-dashboard table { display: block; max-width: 100%; overflow-x: auto; }
 }
+
+.alek-premium-dashboard section[id] { background-color:#fff!important; border-color:#e2e8f0!important; border-radius:20px!important; margin-bottom:22px; }
+.alek-premium-dashboard section[id] input, .alek-premium-dashboard section[id] select, .alek-premium-dashboard section[id] textarea { border-color:#dce4f0!important; border-radius:10px; }
+.alek-premium-dashboard section[id] .bg-amber-600 { background-color:#087bff!important; }
+.alek-premium-dashboard section[id] .text-amber-700 { color:#087bff!important; }
