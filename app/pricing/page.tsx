@@ -1,5 +1,5 @@
-import SiteHeader from "../components/SiteHeader";
 "use client";
+import SiteHeader from "../components/SiteHeader";
 
 import { LEGAL } from "../legal-config";
 import Link from "next/link";
