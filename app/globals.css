@@ -112,3 +112,23 @@ header [aria-current="page"] { font-weight: 800; }
   .alek-premium-dashboard :is(#client-section,#services-section,#settings-section) button { min-height:44px; }
   .alek-premium-dashboard #alek-live-preview :is(p,strong,span) { overflow-wrap:anywhere; }
 }
+
+/* ALEK Artisan: compact, keyboard-accessible mobile workspace */
+@media (max-width: 767px) {
+  .alek-premium-dashboard { overflow-x: clip; }
+  .alek-premium-dashboard main,
+  .alek-premium-dashboard article,
+  .alek-premium-dashboard section,
+  .alek-premium-dashboard form { max-width: 100%; }
+  .alek-premium-dashboard :is(input, textarea, select) { font-size: 16px; }
+  .alek-premium-dashboard :is(button, a) { -webkit-tap-highlight-color: transparent; }
+  .alek-premium-dashboard .alek-editor-steps { padding: 4px; gap: 3px; }
+  .alek-premium-dashboard .alek-editor-steps button { font-size: 10px; line-height: 1.25; }
+  .alek-premium-dashboard #alek-live-preview { overflow-wrap: anywhere; }
+  .alek-premium-dashboard :is(#client-section, #services-section, #settings-section) > div { min-width: 0; }
+  .alek-premium-dashboard :is(#client-section, #services-section, #settings-section) :is(input, textarea, select) { width: 100%; }
+}
+@media (max-width: 380px) {
+  .alek-premium-dashboard .alek-editor-steps button { padding-inline: 2px; font-size: 9px; }
+  .alek-premium-dashboard #alek-live-preview { gap: 12px; }
+}
