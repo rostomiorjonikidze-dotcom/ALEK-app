@@ -110,6 +110,7 @@ export default function HomePage() {
             flexWrap: "wrap",
           }}
         >
+          <Link href="/a-propos" style={{textDecoration:"none",color:"#334155",fontWeight:700,padding:"11px 10px"}}>À propos</Link>
           <InstallApp />
 
           <Link
@@ -418,6 +419,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section style={{maxWidth:1180,margin:"0 auto",padding:"20px 24px 65px"}}><div style={{border:"1px solid #dbeafe",borderRadius:26,padding:"clamp(24px,5vw,48px)",background:"linear-gradient(115deg,#eff6ff,#fff)",display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",gap:24,boxShadow:"0 16px 48px rgba(22,119,232,.08)"}}><div style={{maxWidth:650}}><div style={{fontSize:13,fontWeight:800,color:"#1677e8",letterSpacing:2}}>L’UNIVERS ALEK</div><h2 style={{fontSize:"clamp(27px,4vw,38px)",margin:"12px 0",letterSpacing:"-1px"}}>Bien plus que la facturation.</h2><p style={{color:"#52647a",fontSize:17,lineHeight:1.7}}>Découvrez nos autres projets : mise en relation professionnelle, boutique en ligne et outils numériques en développement.</p></div><Link href="/a-propos" style={{textDecoration:"none",background:"#1677e8",color:"#fff",padding:"15px 23px",borderRadius:13,fontWeight:800}}>Découvrir nos projets ↗</Link></div></section>
+
       <footer
         style={{
           borderTop: "1px solid #e6edf5",
@@ -446,6 +449,7 @@ export default function HomePage() {
               flexWrap: "wrap",
             }}
           >
+            <Link href="/a-propos" style={{ color: "inherit" }}>À propos</Link>
             <Link href="/pricing" style={{ color: "inherit" }}>
               {t.tariffs}
             </Link>
