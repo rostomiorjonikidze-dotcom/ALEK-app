@@ -1,20 +1,23 @@
 "use client";
 import { useEffect, useState } from "react";
+type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{outcome: "accepted" | "dismissed"}> };
 export default function InstallApp() {
-  const [prompt, setPrompt] = useState<any>(null);
-  const [showHelp, setShowHelp] = useState(false);
-  const [installed, setInstalled] = useState(false);
-  useEffect(() => {
-    const onPrompt = (event: Event) => { event.preventDefault(); setPrompt(event); };
-    const onInstalled = () => { setInstalled(true); setPrompt(null); };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    setInstalled(window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & {standalone?: boolean}).standalone === true);
-    return () => { window.removeEventListener("beforeinstallprompt", onPrompt); window.removeEventListener("appinstalled", onInstalled); };
-  }, []);
-  if (installed) return null;
-  const install = async () => {
-    if (prompt) { await prompt.prompt(); setPrompt(null); } else setShowHelp(true);
-  };
-  return <><button type="button" onClick={install} style={{padding:"11px 14px",borderRadius:10,border:"1px solid #1677e8",background:"#e8f3ff",color:"#125bb3",fontWeight:700,cursor:"pointer"}}>Installer l’application</button>{showHelp && <div role="dialog" aria-label="Installation" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:9999,display:"grid",placeItems:"center",padding:20}}><div style={{background:"white",padding:24,borderRadius:18,maxWidth:400,color:"#10233f"}}><h2 style={{fontSize:22,fontWeight:800}}>Installer ALEK Artisan</h2><p style={{marginTop:12,lineHeight:1.6}}>Sur iPhone : ouvrez ce site dans Safari, touchez Partager puis « Sur l’écran d’accueil » et « Ajouter ».</p><p style={{marginTop:10,lineHeight:1.6}}>Sur Android : ouvrez le menu du navigateur et choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ».</p><button type="button" onClick={()=>setShowHelp(false)} style={{marginTop:16,padding:"10px 18px",background:"#1677e8",color:"white",border:0,borderRadius:10}}>Fermer</button></div></div>}</>;
+ const [deferred,setDeferred]=useState<InstallEvent|null>(null);
+ const [help,setHelp]=useState(false);
+ const [installed,setInstalled]=useState(false);
+ const [ios,setIos]=useState(false);
+ useEffect(()=>{
+  const standalone=window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & {standalone?:boolean}).standalone===true;
+  setInstalled(standalone);
+  setIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
+  const onPrompt=(e:Event)=>{e.preventDefault();setDeferred(e as InstallEvent)};
+  const onInstalled=()=>{setInstalled(true);setDeferred(null);setHelp(false)};
+  window.addEventListener("beforeinstallprompt",onPrompt);
+  window.addEventListener("appinstalled",onInstalled);
+  return ()=>{window.removeEventListener("beforeinstallprompt",onPrompt);window.removeEventListener("appinstalled",onInstalled)};
+ },[]);
+ const install=async()=>{if(deferred){try{await deferred.prompt();await deferred.userChoice;setDeferred(null)}catch{setHelp(true)}}else setHelp(true)};
+ if(installed)return null;
+ return <><button type="button" onClick={install} aria-label="Installer ALEK Artisan sur votre appareil" className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"><span aria-hidden="true">↓</span><span>Installer l’app</span></button>
+ {help&&<div role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setHelp(false)}} className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/65 p-4"><div role="dialog" aria-modal="true" aria-labelledby="install-title" className="w-full max-w-md rounded-3xl bg-white p-6 text-slate-900 shadow-2xl sm:p-8"><div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-2xl text-blue-700">↓</div><h2 id="install-title" className="text-2xl font-black">Installer ALEK Artisan</h2><p className="mt-3 leading-7 text-slate-600">Accédez plus rapidement à vos devis et factures depuis l’écran d’accueil de votre appareil.</p>{ios?<ol className="mt-4 list-inside list-decimal space-y-2 text-sm leading-6"><li>Ouvrez cette page dans <strong>Safari</strong>.</li><li>Appuyez sur <strong>Partager</strong>.</li><li>Choisissez <strong>Sur l’écran d’accueil</strong>, puis <strong>Ajouter</strong>.</li></ol>:<ol className="mt-4 list-inside list-decimal space-y-2 text-sm leading-6"><li>Ouvrez cette page dans votre navigateur.</li><li>Ouvrez le menu du navigateur.</li><li>Choisissez <strong>Installer l’application</strong> ou <strong>Ajouter à l’écran d’accueil</strong> si disponible.</li></ol>}<button type="button" autoFocus onClick={()=>setHelp(false)} className="mt-6 w-full rounded-xl bg-blue-700 px-5 py-3 font-bold text-white hover:bg-blue-800">Compris</button></div></div>}</>;
 }
