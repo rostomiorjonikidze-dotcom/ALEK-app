@@ -3,6 +3,8 @@ import SiteHeader from "../components/SiteHeader";
 
 import { LEGAL } from "../legal-config";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
 
 
 const legalLinks = [
@@ -34,6 +36,32 @@ function Footer() {
 
 
 export default function PricingPage() {
+  const [loading,setLoading]=useState<string|null>(null);
+  const [notice,setNotice]=useState("");
+  async function callPayPal(path:string,body:object) {
+    const {data:{session}}=await supabase.auth.getSession();
+    if(!session) { window.location.href="/login"; return null; }
+    const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body)});
+    const result=await response.json();
+    if(!response.ok) throw new Error(result.error||"PayPal unavailable");
+    return result;
+  }
+  async function start(plan:"pro"|"business") {
+    setLoading(plan);setNotice("");
+    try { const result=await callPayPal("/api/paypal/checkout",{plan}); if(result?.url) window.location.assign(result.url); }
+    catch(e) {setNotice(e instanceof Error?e.message:"Payment unavailable");setLoading(null);}
+  }
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("paypal")==="cancel") {setNotice("Paiement annulé. Aucun abonnement activé.");return;}
+    if(params.get("paypal")!=="success") return;
+    const id=params.get("subscription_id");
+    if(!id) {setNotice("Vérification PayPal en attente. Aucun abonnement activé.");return;}
+    setLoading("verify");
+    void callPayPal("/api/paypal/sync",{subscriptionId:id}).then(result=>{
+      if(result) setNotice(result.status==="ACTIVE"?"Abonnement activé avec succès.":"Paiement en attente de confirmation PayPal.");
+    }).catch(e=>setNotice(e instanceof Error?e.message:"Vérification impossible")).finally(()=>setLoading(null));
+  },[]);
   return (
     <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
       <SiteHeader />
@@ -52,6 +80,7 @@ export default function PricingPage() {
           </p>
         </header>
 
+        {notice && <p role="status" className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">{notice}</p>}
         <section className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[
             ["Gratuit", "0 €", "3 générations IA / mois", "Devis et factures illimités"],
@@ -66,6 +95,7 @@ export default function PricingPage() {
               <p className="mt-2 text-sm text-stone-700">✓ {docs}</p>
               <p className="mt-2 text-sm text-stone-700">✓ Création de PDF</p>
               <p className="mt-2 text-sm text-stone-700">✓ Historique des documents {name === "Entreprise" ? "(offre à définir)" : ""}</p>
+              {(name === "Pro" || name === "Business") && <button type="button" disabled={loading!==null} onClick={()=>void start(name==="Pro"?"pro":"business")} className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50">{loading===name.toLowerCase()?"Connexion à PayPal...":"Souscrire avec PayPal →"}</button>}
             </article>
           ))}
         </section>
