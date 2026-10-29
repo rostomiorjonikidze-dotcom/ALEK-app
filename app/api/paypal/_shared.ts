@@ -1,0 +1,7 @@
+import { createClient } from "@supabase/supabase-js";
+export const runtime = "nodejs";
+export function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } }); }
+export async function userFrom(request: Request) { const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, ""); if (!token) return null; const db = admin(); const { data, error } = await db.auth.getUser(token); return error ? null : data.user; }
+export function paypalBase() { return process.env.PAYPAL_ENV?.toLowerCase() === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com"; }
+export async function paypalToken() { const id=process.env.PAYPAL_CLIENT_ID, secret=process.env.PAYPAL_CLIENT_SECRET; if (!id || !secret) throw Error("PayPal credentials unavailable"); const response=await fetch(paypalBase()+"/v1/oauth2/token",{method:"POST",headers:{"Authorization":"Basic "+Buffer.from(id+":"+secret).toString("base64"),"Content-Type":"application/x-www-form-urlencoded"},body:"grant_type=client_credentials",cache:"no-store"}); if(!response.ok) throw Error("PayPal authentication failed"); return (await response.json()).access_token as string; }
+export async function subscription(id:string) { const token=await paypalToken(); const r=await fetch(paypalBase()+"/v1/billing/subscriptions/"+encodeURIComponent(id),{headers:{Authorization:"Bearer "+token},cache:"no-store"}); if(!r.ok) throw Error("PayPal subscription lookup failed"); return r.json(); }
