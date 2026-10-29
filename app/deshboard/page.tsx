@@ -710,6 +710,24 @@ export default function Home() {
     setUserRole(data.role || "user");
     setPlan((data.plan || "free") as Plan);
     setUsageCount(Number(data.usage_count) || 0);
+    if (data.role !== "owner") {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.access_token) {
+        try {
+          const response = await fetch("/api/paypal/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + sessionData.session.access_token },
+            body: JSON.stringify({}),
+          });
+          if (response.ok) {
+            const verified = await response.json();
+            setPlan((verified.plan || "free") as Plan);
+          }
+        } catch (error) {
+          console.warn("PayPal status refresh unavailable", error);
+        }
+      }
+    }
   }
 
   async function loadDocuments() {
