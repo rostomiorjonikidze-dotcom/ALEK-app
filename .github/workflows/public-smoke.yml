@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - name: Verify live public pages and AI auth gate
+      - name: Validate French compliance templates\n        run: node --experimental-strip-types --test tests/pro-compliance.test.mjs\n      - name: Verify live public pages and AI auth gate
         env:
           ALEK_BASE_URL: https://app.alek.best
         run: node --test tests/public-smoke.test.mjs

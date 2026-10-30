@@ -41,19 +41,19 @@ export default function RefundPage() {
             <p className="mt-2">Les offres Pro et Business sont prévues comme des abonnements mensuels renouvelés automatiquement jusqu’à résiliation.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">2. Annulation</h2>
-            <p className="mt-2">Lorsque votre abonnement est traité par Paddle, vous pouvez gérer ou annuler l’abonnement depuis le portail client Paddle ou le lien « Gérer l’abonnement » contenu dans votre e-mail de confirmation. Une annulation programmée prend généralement effet à la fin de la période de facturation en cours.</p>
+            <p className="mt-2">Pour les abonnements traités par PayPal, vous pouvez annuler le paiement automatique depuis votre compte PayPal ou demander une assistance à ALEK. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">3. Remboursements et droit de rétractation</h2>
-            <p className="mt-2">Les achats traités par Paddle sont soumis à la politique de remboursement de Paddle et aux droits impératifs applicables dans votre pays. Pour les consommateurs de l’Union européenne/EEE, les droits légaux de rétractation applicables restent pleinement réservés.</p>
+            <p className="mt-2">Toute demande de remboursement est examinée par ALEK selon le service fourni, les conditions de vente applicables et les droits impératifs du client. Les droits légaux de rétractation éventuellement applicables aux consommateurs de l'Union européenne restent réservés.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">4. Demander un remboursement</h2>
-            <p className="mt-2">Pour une transaction Paddle, utilisez le lien de gestion présent dans votre reçu ou rendez-vous sur <a className="font-semibold text-amber-700 underline" href="https://paddle.net/" target="_blank" rel="noreferrer">paddle.net</a>. Vous pouvez aussi nous contacter à {LEGAL.supportEmail} afin que nous vous aidions à identifier la transaction.</p>
+            <p className="mt-2">Pour une transaction PayPal, conservez votre référence de paiement et contactez {LEGAL.supportEmail} pour demander l’examen du dossier. Vous pouvez également consulter vos paiements automatiques dans votre compte PayPal.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">5. Effet d’un remboursement</h2>
             <p className="mt-2">Lorsqu’un remboursement est accordé, l’accès aux fonctionnalités payantes associées peut être retiré ou revenir à l’offre gratuite, conformément à l’état de l’abonnement.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">6. Droits obligatoires</h2>
-            <p className="mt-2">La présente politique ne réduit aucun droit légal auquel vous ne pouvez pas renoncer. En cas de différence entre cette page et les conditions impératives applicables à une transaction Paddle, les droits obligatoires et les conditions Paddle applicables prévalent.</p>
+            <p className="mt-2">La présente politique ne réduit aucun droit légal auquel vous ne pouvez pas renoncer. En cas de contradiction, les règles légales impératives applicables prévalent.</p>
           </section>
         </div>
         <Footer />

@@ -50,24 +50,24 @@ export default function PrivacyPage() {
             <p className="mt-2">Selon le traitement, les bases peuvent inclure l’exécution du contrat, le respect d’une obligation légale, l’intérêt légitime à sécuriser et améliorer le service, ou votre consentement lorsqu’il est requis.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">5. Prestataires</h2>
-            <p className="mt-2">ALEK s’appuie notamment sur des prestataires techniques pour l’hébergement, l’authentification et la base de données, le traitement IA et, lorsque les paiements seront activés, Paddle pour les paiements et abonnements. Certaines données peuvent être transmises à ces prestataires uniquement lorsque cela est nécessaire à la fourniture du service.</p>
+            <p className="mt-2">ALEK s’appuie notamment sur des prestataires techniques pour l’hébergement, l’authentification et la base de données, le traitement IA et, PayPal pour les paiements et abonnements. Certaines données peuvent être transmises à ces prestataires uniquement lorsque cela est nécessaire à la fourniture du service.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">6. Intelligence artificielle</h2>
-            <p className="mt-2">Lorsque vous demandez une préparation en français, le contenu nécessaire à cette génération peut être transmis au fournisseur d’IA configuré par ALEK. Évitez d’inclure des données sensibles qui ne sont pas nécessaires au document.</p>
+            <p className="mt-2">Lorsque vous demandez une préparation en français ou une analyse de reçu, le texte ou la photographie nécessaire à cette opération peut être transmis au fournisseur d’IA configuré par ALEK. Les photos envoyées au scanner ne sont pas conservées par ALEK ; les données extraites validées peuvent être enregistrées dans votre registre privé de dépenses. Évitez d'inclure des données sensibles inutiles.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">7. Conservation</h2>
             <p className="mt-2">Les données sont conservées pendant la durée nécessaire à la fourniture du service, au fonctionnement du compte et au respect des obligations légales. Les documents que vous enregistrez peuvent rester associés à votre compte jusqu’à leur suppression ou à la suppression du compte, sous réserve des obligations de conservation applicables.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">8. Stockage local et cookies</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">8. Signature de devis</h2><p className="mt-2">Lorsqu’un lien personnel de signature est créé, ALEK conserve une copie figée du devis, son empreinte numérique, un jeton de lien haché, la date d’accord, le nom et le tracé de signature fourni, ainsi qu’une empreinte non réversible de l’adresse IP et des informations techniques limitées à des fins probatoires et de sécurité. Le destinataire doit consentir explicitement avant de signer. Les personnes concernées peuvent exercer leurs droits auprès du responsable du traitement, sous réserve des obligations légales de conservation.</p></section><section><h2 className="text-xl font-bold text-stone-900">9. Stockage local et cookies</h2>
             <p className="mt-2">ALEK peut utiliser le stockage local du navigateur et des technologies strictement nécessaires pour conserver une session, un brouillon ou des préférences. Aucun cookie publicitaire n’est requis pour les fonctions principales décrites ici.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">9. Vos droits</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">10. Vos droits</h2>
             <p className="mt-2">Selon la réglementation applicable, notamment le RGPD dans l’EEE, vous pouvez demander l’accès, la rectification, l’effacement, la limitation, l’opposition ou la portabilité de vos données, et retirer votre consentement lorsque le traitement repose sur celui-ci. Contactez {LEGAL.supportEmail}.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">10. Réclamation</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">11. Réclamation</h2>
             <p className="mt-2">Si vous résidez dans l’EEE, vous pouvez également saisir l’autorité de protection des données compétente. En France, il s’agit de la CNIL.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">11. Sécurité</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">12. Sécurité</h2>
             <p className="mt-2">Nous mettons en œuvre des mesures raisonnables destinées à protéger les comptes et données. Aucun système informatique ne peut toutefois garantir une sécurité absolue.</p>
           </section>
         </div>
