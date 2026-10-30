@@ -27,7 +27,9 @@ export async function POST(request: Request) {
       expires_at: new Date(Date.now() + 14 * 86400_000).toISOString(), status: "pending",
     });
     if (insertError) return NextResponse.json({ error: "Impossible de créer la demande de signature." }, { status: 503 });
-    return NextResponse.json({ url: "https://app.alek.best/sign/" + rawToken, expiresInDays: 14, note: "Signature électronique simple, sans vérification d'identité forte. Transmettez le lien au destinataire prévu." });
+    const requestOrigin = new URL(request.url).origin;
+    const safeOrigin = requestOrigin === "https://app.alek.best" || /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(requestOrigin) ? requestOrigin : "https://app.alek.best";
+    return NextResponse.json({ url: safeOrigin + "/sign/" + rawToken, expiresInDays: 14, note: "Signature électronique simple, sans vérification d'identité forte. Transmettez le lien au destinataire prévu." });
   } catch {
     return NextResponse.json({ error: "Impossible de préparer la signature." }, { status: 500 });
   }
