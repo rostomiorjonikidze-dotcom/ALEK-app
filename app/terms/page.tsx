@@ -54,10 +54,10 @@ export default function TermsPage() {
             <p className="mt-2">ALEK propose une offre gratuite et des offres payantes mensuelles. Les limites de générations IA et les fonctionnalités incluses sont affichées sur la page Tarifs. Les devis et factures sont illimités sur les offres annoncées comme telles.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">6. Paiements et renouvellement</h2>
-            <p className="mt-2">Pour les achats traités par Paddle, Paddle agit comme Merchant of Record et est le vendeur de la transaction. Les abonnements payants se renouvellent automatiquement jusqu’à leur résiliation. Les modalités de paiement affichées au checkout prévalent pour la transaction concernée.</p>
+            <p className="mt-2">Les abonnements payants sont traités via PayPal lorsqu'ils sont activés. PayPal intervient comme prestataire de paiement ; ALEK fournit le service logiciel. Les abonnements se renouvellent jusqu'à résiliation selon les informations présentées lors de la souscription.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">7. Résiliation</h2>
-            <p className="mt-2">Un abonnement peut être résilié conformément aux options fournies dans le portail client Paddle ou via les liens contenus dans les e-mails de transaction. Sauf disposition impérative contraire, l’accès payant reste disponible jusqu’à la fin de la période déjà réglée lorsque la résiliation prend effet à l’échéance.</p>
+            <p className="mt-2">Pour résilier un abonnement PayPal, utilisez vos paramètres de paiements automatiques PayPal ou contactez ALEK via l'adresse de support figurant sur le site. Sous réserve des dispositions impératives, la résiliation s'applique à la prochaine échéance.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">8. Propriété intellectuelle</h2>
             <p className="mt-2">ALEK, son interface, son logo, ses composants logiciels et ses contenus propres sont protégés. L’utilisateur conserve ses droits sur les informations qu’il saisit et reste responsable de disposer des droits nécessaires sur ces données.</p>
@@ -71,7 +71,7 @@ export default function TermsPage() {
           <section><h2 className="text-xl font-bold text-stone-900">11. Données personnelles</h2>
             <p className="mt-2">Le traitement des données personnelles est décrit dans la Politique de confidentialité.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">12. Droit applicable</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">12. Outils de signature, OCR et conformité</h2><p className="mt-2">Le contrôle de conformité est indicatif. Les photographies transmises pour reconnaissance de reçus sont traitées par un fournisseur IA ; les champs extraits doivent être vérifiés avant validation. La signature au doigt ou à la souris est une signature électronique simple, sans vérification forte de l’identité et sans garantie de qualification eIDAS.</p></section><section><h2 className="text-xl font-bold text-stone-900">13. Droit applicable</h2>
             <p className="mt-2">Les présentes sont interprétées conformément au droit applicable à l’éditeur, sous réserve des règles impératives de protection des consommateurs qui pourraient s’appliquer à l’utilisateur.</p>
           </section>
         </div>
