@@ -7,6 +7,7 @@ const links = [
   { href: "/", label: "Accueil" },
   { href: "/a-propos", label: "À propos" },
   { href: "/pricing", label: "Tarifs" },
+  { href: "/outils-pro", label: "Outils Pro" },
 ] as const;
 
 export default function SiteHeader() {
