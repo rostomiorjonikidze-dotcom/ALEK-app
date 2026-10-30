@@ -84,8 +84,8 @@ export default function PricingPage() {
         <section className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[
             ["Gratuit", "0 €", "3 générations IA / mois", "Devis et factures illimités"],
-            ["Pro", "9,99 € / mois", "10 générations IA / mois", "Devis et factures illimités"],
-            ["Business", "19,99 € / mois", "IA illimitée", "Devis et factures illimités"],
+            ["Pro", "19,99 € / mois", "10 générations IA / mois", "Devis et factures illimités"],
+            ["Business", "49,99 € / mois", "IA illimitée", "Devis et factures illimités"],
             ["Entreprise", "Sur devis", "Fonctions multi-utilisateurs à venir", "Contactez-nous pour vos besoins"],
           ].map(([name, price, ai, docs]) => (
             <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-blue-500 bg-blue-50 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : "border-blue-100 bg-white"}`}>
