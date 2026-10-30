@@ -1124,11 +1124,11 @@ export default function Home() {
     autoTable(doc, {
       startY: descriptionY + 6,
       margin: { left, right: 18, top: 20, bottom: 22 },
-      head: [["Description", "Qté / Heures", "Prix unitaire", "Total HT"]],
+      head: [["Description", "Qté / Heures", "Prix / mode", "Total HT"]],
       body: services.map(item => [
         safe(item.description),
-        item.priceType === "hourly" ? `${item.hours} h` : String(item.quantity),
-        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : ""}`,
+        item.priceType === "hourly" ? `${item.hours} h` : item.priceType === "total" ? "Forfait" : String(item.quantity),
+        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : item.priceType === "total" ? " forfait" : "/unité"}`,
         `${serviceTotal(item).toFixed(2)} EUR`,
       ]),
       styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
