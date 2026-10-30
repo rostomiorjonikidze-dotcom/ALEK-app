@@ -35,7 +35,7 @@ export async function POST(req:NextRequest){
     return NextResponse.json({document,disclaimer:"Brouillon assisté par IA : vérification humaine et juridique requise avant utilisation.",remaining:q.remaining});
   }catch(e){
     console.error("Legal generation failed",e);
-    if(refundable)await db.rpc("refund_ai_usage",{p_user_id:user.id}).catch(()=>{});
+    if(refundable)await db.rpc("refund_ai_usage",{p_user_id:user.id});
     return NextResponse.json({error:"Génération momentanément indisponible."},{status:502});
   }
 }
