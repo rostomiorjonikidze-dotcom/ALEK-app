@@ -34,3 +34,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Impossible de préparer la signature." }, { status: 500 });
   }
 }
+
+
+export async function GET(request: Request) {
+  const user = await userFrom(request);
+  if (!user) return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
+  const { data, error } = await admin().from("artisan_signature_requests")
+    .select("id,document_id,status,signer_name,signed_at,created_at,expires_at,signature_sha256")
+    .eq("user_id",user.id).order("created_at",{ascending:false}).limit(30);
+  if (error) return NextResponse.json({error:"Liste indisponible."},{status:503});
+  return NextResponse.json({requests:data||[]},{headers:{"Cache-Control":"no-store"}});
+}
