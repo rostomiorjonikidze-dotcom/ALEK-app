@@ -16,7 +16,8 @@ export async function POST(request:Request){
  if(!result.ok)return NextResponse.json({error:"PayPal n’a pas confirmé la résiliation. Réessayez ou contactez le support."},{status:502});
  const verified=await subscription(id);
  if(verified.status!=="CANCELLED")return NextResponse.json({status:verified.status,message:"Demande envoyée. Vérifiez votre compte PayPal et contactez le support si nécessaire."});
- await db.from("profiles").update({paypal_subscription_status:"CANCELLED"}).eq("id",user.id).eq("paypal_subscription_id",id);
+ const {error:updateError}=await db.from("profiles").update({plan:"free",paypal_subscription_status:"CANCELLED",subscription_updated_at:new Date().toISOString()}).eq("id",user.id).eq("paypal_subscription_id",id);
+ if(updateError)return NextResponse.json({status:"CANCELLED",message:"Résiliation confirmée par PayPal, mais synchronisation du compte en attente. Contactez le support."});
  return NextResponse.json({status:"CANCELLED",message:"Résiliation confirmée par PayPal. Aucun nouveau renouvellement de cet abonnement."});
  }catch{return NextResponse.json({error:"Service PayPal indisponible. Vous pouvez aussi résilier depuis votre compte PayPal."},{status:503});}
 }
