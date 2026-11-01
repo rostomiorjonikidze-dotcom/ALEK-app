@@ -10,7 +10,7 @@ export async function POST(request:Request){
  if(!id)return NextResponse.json({error:"Aucun abonnement PayPal lié à ce compte. Consultez vos paiements automatiques PayPal ou contactez le support."},{status:404});
  const current=await subscription(id);
  if(current.custom_id!==user.id)return NextResponse.json({error:"Impossible de vérifier le titulaire de l’abonnement"},{status:403});
- if(current.status==="CANCELLED"||current.status==="EXPIRED")return NextResponse.json({status:current.status,message:"Abonnement déjà résilié."});
+ if(current.status==="CANCELLED"||current.status==="EXPIRED"){await db.from("profiles").update({plan:"free",paypal_subscription_status:current.status,subscription_updated_at:new Date().toISOString()}).eq("id",user.id).eq("paypal_subscription_id",id);return NextResponse.json({status:current.status,message:"Abonnement déjà résilié."});}
  const token=await paypalToken();
  const result=await fetch(paypalBase()+"/v1/billing/subscriptions/"+encodeURIComponent(id)+"/cancel",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","PayPal-Request-Id":crypto.randomUUID()},body:JSON.stringify({reason:"Résiliation demandée par le titulaire depuis ALEK"}),cache:"no-store"});
  if(!result.ok)return NextResponse.json({error:"PayPal n’a pas confirmé la résiliation. Réessayez ou contactez le support."},{status:502});
