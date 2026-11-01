@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import InstallApp from "../components/InstallApp";
+import {paymentClauses} from "../lib/pro-compliance";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -520,6 +521,8 @@ export default function Home() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [invoiceStatus, setInvoiceStatus] = useState("unpaid");
   const [vatRate, setVatRate] = useState(0);
+  const [clientIsProfessional,setClientIsProfessional]=useState(false);
+  const [vatExemptionConfirmed,setVatExemptionConfirmed]=useState(false);
 
   const [plan, setPlan] = useState<Plan>("free");
   const [usageCount, setUsageCount] = useState(0);
@@ -1055,6 +1058,8 @@ export default function Home() {
 
   function createPdf() {
     if (!validateDocument()) return;
+    if(vatExemptionConfirmed && vatRate!==0){alert("La franchise en base de TVA nécessite un taux de TVA à 0 %.");return;}
+    if(vatRate===0 && !vatExemptionConfirmed && !window.confirm("TVA à 0 % : confirmez que votre régime de TVA ou l’exonération applicable est correctement documenté. Continuer sans mention article 293 B ?"))return;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -1153,6 +1158,10 @@ export default function Home() {
     const details = documentType === "facture"
       ? [paymentTerms && `Conditions de paiement : ${paymentTerms}`, paymentMethod && `Mode de paiement : ${paymentMethod}`, `Statut : ${invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée"}`].filter(Boolean) as string[]
       : [];
+    if(documentType==="facture"){
+      details.push(...paymentClauses(clientIsProfessional?"professionnel":"particulier",30,vatExemptionConfirmed));
+      if(clientIsProfessional)details.push("Référence : article D. 441-5 du Code de commerce (indemnité forfaitaire de recouvrement).");
+    }
     for (const detail of details) {
       const lines = doc.splitTextToSize(detail, 170) as string[];
       if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
@@ -1348,7 +1357,7 @@ export default function Home() {
 
           <section id="settings-section" className={`scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)] ${editorStep === 2 ? "" : "hidden"}`}>
             <div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-blue-50 p-3 text-xl">💶</div><div><p className="text-sm font-semibold text-blue-700">Tarification</p><h2 className="text-2xl font-extrabold">{t.pricing}</h2></div></div>
-            <label className="text-sm font-semibold">TVA<select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
+            <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>setVatExemptionConfirmed(e.target.checked)}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
             <div className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.materials}</p><p className="mt-1 text-2xl font-bold">{materialFromServices.toFixed(2)} €</p></div><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.laborTotal}</p><p className="mt-1 text-2xl font-bold">{laborFromServices.toFixed(2)} €</p></div></div>
             <div className="mt-4 rounded-2xl bg-[#f8efe5] p-5"><div className="flex justify-between"><span>HT</span><b>{totalHT.toFixed(2)} €</b></div><div className="mt-2 flex justify-between"><span>TVA ({vatRate}%)</span><b>{vatAmount.toFixed(2)} €</b></div><div className="mt-3 flex items-center justify-between border-t pt-3"><span className="text-lg font-bold">TTC</span><span className="text-3xl font-black">{totalTTC.toFixed(2)} €</span></div></div>
             <p className="mt-4 text-xs leading-5 text-slate-500">Vérifiez les coordonnées du client, les prestations et la TVA avant l’enregistrement ou l’export PDF.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="rounded-xl bg-emerald-600 px-5 py-4 font-bold text-white hover:bg-emerald-700">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="rounded-xl bg-stone-800 px-5 py-4 font-bold text-white hover:bg-stone-700">{t.createPdf}</button></div>
