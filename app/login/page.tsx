@@ -39,6 +39,7 @@ const texts = {
     captchaRequired: "გთხოვ გაიარე CAPTCHA შემოწმება.",
     signupSuccess:
       "რეგისტრაცია წარმატებულია. შეამოწმე ელფოსტა ანგარიშის დასადასტურებლად.",
+    accountReady: "ანგარიში მზადაა. შეგიძლია შეხვიდე.",
     privacy:
       "რეგისტრაციით ადასტურებ, რომ მოწოდებული პროფესიული ინფორმაცია სწორია.",
   },
@@ -73,6 +74,7 @@ const texts = {
     captchaRequired: "Veuillez compléter la vérification CAPTCHA.",
     signupSuccess:
       "Inscription réussie. Consultez votre e-mail pour confirmer votre compte.",
+    accountReady: "Votre compte est prêt. Connectez-vous.",
     privacy:
       "En vous inscrivant, vous confirmez que les informations professionnelles fournies sont exactes.",
   },
@@ -107,6 +109,7 @@ const texts = {
     captchaRequired: "Пройдите CAPTCHA-проверку.",
     signupSuccess:
       "Регистрация успешна. Проверьте электронную почту для подтверждения аккаунта.",
+    accountReady: "Аккаунт готов. Войдите.",
     privacy:
       "Регистрируясь, вы подтверждаете правильность предоставленной профессиональной информации.",
   },
@@ -141,6 +144,7 @@ const texts = {
     captchaRequired: "Bitte führen Sie die CAPTCHA-Prüfung durch.",
     signupSuccess:
       "Registrierung erfolgreich. Bitte bestätigen Sie Ihr Konto per E-Mail.",
+    accountReady: "Ihr Konto ist bereit. Melden Sie sich an.",
     privacy:
       "Mit der Registrierung bestätigen Sie die Richtigkeit Ihrer Unternehmensangaben.",
   },
@@ -175,6 +179,7 @@ const texts = {
     captchaRequired: "يرجى إكمال التحقق CAPTCHA.",
     signupSuccess:
       "تم التسجيل بنجاح. تحقق من بريدك الإلكتروني لتأكيد الحساب.",
+    accountReady: "حسابك جاهز. سجل الدخول.",
     privacy:
       "بإنشاء الحساب، فإنك تؤكد أن المعلومات المهنية المقدمة صحيحة.",
   },
@@ -296,7 +301,7 @@ export default function LoginPage() {
 
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
           options: {
@@ -318,7 +323,8 @@ export default function LoginPage() {
           return;
         }
 
-        setMessage(t.signupSuccess);
+        setMessage(data.session ? t.accountReady : t.signupSuccess);
+        if (data.session) setMode("login");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
@@ -624,6 +630,7 @@ export default function LoginPage() {
             </div>
           )}
 
+          {mode === "login" && message && <button type="button" onClick={()=>{setMessage("");void handleSubmit();}} style={{border:"1px solid #bfdbfe",background:"#eff6ff",color:"#1d4ed8",borderRadius:10,padding:12,fontWeight:700,cursor:"pointer"}}>{t.loginButton} →</button>}
           {mode === "login" && !recoveryMode && <button type="button" onClick={()=>{setMessage("");setRecoveryMode(true);}} style={{border:0,background:"transparent",color:"#1677ff",padding:"9px",cursor:"pointer"}}>{recoveryLabels[0]}</button>}
           <button
             type="button"
