@@ -44,9 +44,9 @@ export default function LegalNoticePage() {
             <p>E-mail : {LEGAL.supportEmail}</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">Hébergement</h2>
-            <p className="mt-2">L’application ALEK est destinée à être hébergée sur une infrastructure cloud sécurisée. Les informations exactes de l’hébergeur de production doivent être renseignées ici avant la mise en ligne publique définitive.</p>
+            <p className="mt-2">Hébergement applicatif : Vercel Inc. (vercel.com). Authentification et base de données : Supabase (supabase.com). L’éditeur doit confirmer et publier les coordonnées complètes des hébergeurs.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">Propriété intellectuelle</h2>
+          <section><h2 className="text-xl font-bold text-stone-900">Informations à compléter</h2><p>Le SIREN/SIRET, la forme juridique, le directeur de publication et, si applicable, le numéro de TVA doivent être confirmés par l’éditeur et publiés ici. Cette page ne constitue pas encore une notice complète.</p></section><section><h2 className="text-xl font-bold text-stone-900">Propriété intellectuelle</h2>
             <p className="mt-2">La marque ALEK, le logo, l’interface et les contenus propres du service sont protégés par les droits applicables. Toute reproduction non autorisée est interdite sauf exception légale.</p>
           </section>
         </div>
