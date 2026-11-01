@@ -62,7 +62,7 @@ export default function PrivacyPage() {
             <p className="mt-2">ALEK peut utiliser le stockage local du navigateur et des technologies strictement nécessaires pour conserver une session, un brouillon ou des préférences. Aucun cookie publicitaire n’est requis pour les fonctions principales décrites ici.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">10. Vos droits</h2>
-            <p className="mt-2">Selon la réglementation applicable, notamment le RGPD dans l’EEE, vous pouvez demander l’accès, la rectification, l’effacement, la limitation, l’opposition ou la portabilité de vos données, et retirer votre consentement lorsque le traitement repose sur celui-ci. Contactez {LEGAL.supportEmail}.</p>
+            <p className="mt-2">Selon la réglementation applicable, notamment le RGPD dans l’EEE, vous pouvez demander l’accès, la rectification, l’effacement, la limitation, l’opposition ou la portabilité de vos données, et retirer votre consentement lorsque le traitement repose sur celui-ci. Contactez {LEGAL.supportEmail}. <a href="/mes-donnees" className="font-semibold text-blue-700 underline">Exercer mes droits RGPD</a>.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">11. Réclamation</h2>
             <p className="mt-2">Si vous résidez dans l’EEE, vous pouvez également saisir l’autorité de protection des données compétente. En France, il s’agit de la CNIL.</p>
