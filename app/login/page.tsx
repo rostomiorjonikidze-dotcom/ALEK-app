@@ -514,9 +514,9 @@ export default function LoginPage() {
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
-          />
+          /><button type="button" aria-label={recoveryLabels[5]} onClick={()=>setShowPassword(v=>!v)} style={{border:"1px solid #d6dce5",background:"#fff",borderRadius:"9px",padding:"12px",cursor:"pointer"}}>{showPassword ? "🙈" : "👁️"}</button></div>}
 
-          {mode === "signup" && (
+          {!recoveryMode && mode === "signup" && (
             <input
               style={inputStyle}
               type={showConfirmPassword ? "text" : "password"}
@@ -527,7 +527,7 @@ export default function LoginPage() {
             />
           )}
 
-          {mode === "signup" && (
+          {!recoveryMode && mode === "signup" && (
             <>
               <div
                 style={{
