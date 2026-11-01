@@ -200,8 +200,18 @@ export default function LoginPage() {
   const [captchaToken, setCaptchaToken] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   const t = texts[lang];
+  const recoveryLabels = {
+    ka: ["პაროლი დაგავიწყდა?", "პაროლის აღდგენა", "აღდგენის ბმული გამოგზავნილია, თუ ეს მისამართი რეგისტრირებულია. შეამოწმე სპამიც.", "შესვლაზე დაბრუნება", "ახალი პაროლის ბმულის გაგზავნა", "პაროლის ჩვენება"],
+    fr: ["Mot de passe oublié ?", "Réinitialiser le mot de passe", "Si cette adresse est enregistrée, un lien de réinitialisation sera envoyé. Vérifiez aussi les spams.", "Retour à la connexion", "Envoyer le lien de réinitialisation", "Afficher le mot de passe"],
+    ru: ["Забыли пароль?", "Сброс пароля", "Если адрес зарегистрирован, письмо со ссылкой будет отправлено. Проверьте спам.", "Вернуться ко входу", "Отправить ссылку", "Показать пароль"],
+    de: ["Passwort vergessen?", "Passwort zurücksetzen", "Falls die Adresse registriert ist, wird ein Link gesendet. Prüfen Sie auch Spam.", "Zurück zur Anmeldung", "Link senden", "Passwort anzeigen"],
+    ar: ["هل نسيت كلمة المرور؟", "إعادة تعيين كلمة المرور", "إذا كان البريد مسجلاً، فسيتم إرسال رابط. تحقق من الرسائل غير المرغوبة.", "العودة لتسجيل الدخول", "إرسال رابط إعادة التعيين", "إظهار كلمة المرور"],
+  }[lang];
   const captchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
   const captchaEnabled = Boolean(captchaSiteKey);
 
@@ -216,6 +226,19 @@ export default function LoginPage() {
     const hasSpecial = /[^A-Za-z0-9]/.test(value);
 
     return hasUppercase && hasLowercase && hasNumber && hasSpecial;
+  }
+
+  async function handleRecovery() {
+    setMessage("");
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) { setMessage(t.required); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password` });
+      if (error) { setMessage(error.message); return; }
+      setMessage(recoveryLabels[2]);
+    } catch { setMessage("Unable to request password reset. Please try again."); }
+    finally { setLoading(false); }
   }
 
   async function handleSubmit() {
@@ -410,7 +433,7 @@ export default function LoginPage() {
             margin: "0 0 6px",
           }}
         >
-          {mode === "login" ? t.login : t.signup}
+          {recoveryMode ? recoveryLabels[1] : mode === "login" ? t.login : t.signup}
         </h1>
 
         <p
@@ -420,7 +443,7 @@ export default function LoginPage() {
             marginBottom: "24px",
           }}
         >
-          {mode === "login" ? t.subtitleLogin : t.subtitleSignup}
+          {recoveryMode ? recoveryLabels[1] : mode === "login" ? t.subtitleLogin : t.subtitleSignup}
         </p>
 
         <div
@@ -429,7 +452,7 @@ export default function LoginPage() {
             gap: "12px",
           }}
         >
-          {mode === "signup" && (
+          {!recoveryMode && mode === "signup" && (
             <>
               <div
                 style={{
@@ -482,21 +505,21 @@ export default function LoginPage() {
             autoComplete="email"
           />
 
-          <input
-            style={inputStyle}
-            type="password"
+          {!recoveryMode && <div style={{display:"flex",gap:"8px",alignItems:"center"}}><input
+            style={{...inputStyle,flex:1,minWidth:0}}
+            type={showPassword ? "text" : "password"}
             placeholder={t.password}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={
               mode === "login" ? "current-password" : "new-password"
             }
-          />
+          /><button type="button" aria-label={recoveryLabels[5]} onClick={()=>setShowPassword(v=>!v)} style={{border:"1px solid #d6dce5",background:"#fff",borderRadius:"9px",padding:"12px",cursor:"pointer"}}>{showPassword ? "🙈" : "👁️"}</button></div>}
 
-          {mode === "signup" && (
+          {!recoveryMode && mode === "signup" && (
             <input
               style={inputStyle}
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               placeholder={t.confirmPassword}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -504,7 +527,7 @@ export default function LoginPage() {
             />
           )}
 
-          {mode === "signup" && (
+          {!recoveryMode && mode === "signup" && (
             <>
               <div
                 style={{
@@ -564,7 +587,7 @@ export default function LoginPage() {
           )}
 
           <button
-            onClick={handleSubmit}
+            onClick={recoveryMode ? handleRecovery : handleSubmit}
             disabled={loading}
             style={{
               width: "100%",
@@ -581,7 +604,7 @@ export default function LoginPage() {
           >
             {loading
               ? t.loading
-              : mode === "login"
+              : recoveryMode ? recoveryLabels[4] : mode === "login"
               ? t.loginButton
               : t.signupButton}
           </button>
@@ -601,9 +624,11 @@ export default function LoginPage() {
             </div>
           )}
 
+          {mode === "login" && !recoveryMode && <button type="button" onClick={()=>{setMessage("");setRecoveryMode(true);}} style={{border:0,background:"transparent",color:"#1677ff",padding:"9px",cursor:"pointer"}}>{recoveryLabels[0]}</button>}
           <button
             type="button"
             onClick={() => {
+              if(recoveryMode){setRecoveryMode(false);setMessage("");return;}
               setMessage("");
               setCaptchaToken("");
               captchaRef.current?.resetCaptcha();
@@ -621,7 +646,7 @@ export default function LoginPage() {
               fontSize: "14px",
             }}
           >
-            {mode === "login" ? t.noAccount : t.hasAccount}
+            {recoveryMode ? recoveryLabels[3] : mode === "login" ? t.noAccount : t.hasAccount}
           </button>
         </div>
       </div>
