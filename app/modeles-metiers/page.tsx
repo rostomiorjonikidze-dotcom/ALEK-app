@@ -1,0 +1,16 @@
+"use client";
+import {useState} from "react";
+import Link from "next/link";
+const models:Record<string,string[]>={
+"Plomberie":["Recherche de fuite","Remplacement robinetterie","Réparation tuyauterie","Déplacement"],
+"Électricité":["Diagnostic installation","Pose de prises","Mise en sécurité","Remplacement tableau"],
+"Peinture":["Protection des surfaces","Préparation des murs","Peinture murs","Nettoyage de chantier"],
+"Maçonnerie":["Préparation chantier","Maçonnerie","Enduit","Évacuation des gravats"],
+"Rénovation":["Dépose","Préparation support","Pose revêtement","Finitions"],
+"Jardinage":["Tonte","Taille de haies","Élagage léger","Évacuation déchets verts"],
+"Nettoyage":["Nettoyage régulier","Nettoyage vitres","Nettoyage après chantier","Déplacement"],
+"Informatique":["Diagnostic","Installation","Maintenance","Assistance à distance"]
+};
+export default function Modeles(){const [job,setJob]=useState("Plomberie");const [checked,setChecked]=useState<string[]>([]);const [customer,setCustomer]=useState("");const [company,setCompany]=useState("");
+const chosen=checked.filter(x=>models[job].includes(x));function download(){const lines=["ALEK — BROUILLON DE DEVIS",company||"Entreprise à compléter","Client : "+(customer||"à compléter"),"Activité : "+job,"",...chosen.map((x,i)=>(i+1)+". "+x+" — quantité et prix à compléter"),"","Document non contractuel. Vérifier prix, TVA, mentions légales, assurances et conditions avant émission."];const blob=new Blob([lines.join("\n")],{type:"text/plain;charset=utf-8"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="modele-devis-alek.txt";a.click();URL.revokeObjectURL(u);}
+return <main className="min-h-screen bg-slate-50 p-5 text-slate-900"><div className="mx-auto max-w-3xl"><Link href="/deshboard" className="text-blue-700">← Mon espace</Link><h1 className="mt-5 text-3xl font-bold">Modèles de devis par métier</h1><p className="mt-2 text-slate-600">Choisissez un métier et préparez une liste de prestations. Sans prix inventés.</p><div className="mt-6 rounded-2xl bg-white p-6 shadow-sm"><label className="block font-semibold">Métier<select className="mt-2 w-full rounded-xl border p-3" value={job} onChange={e=>{setJob(e.target.value);setChecked([]);}}>{Object.keys(models).map(x=><option key={x}>{x}</option>)}</select></label><div className="mt-4 grid gap-3 sm:grid-cols-2"><input className="rounded-xl border p-3" placeholder="Votre entreprise" value={company} onChange={e=>setCompany(e.target.value)}/><input className="rounded-xl border p-3" placeholder="Nom du client" value={customer} onChange={e=>setCustomer(e.target.value)}/></div><h2 className="mt-6 font-semibold">Prestations</h2><div className="mt-3 space-y-3">{models[job].map(x=><label key={x} className="flex items-center gap-3 rounded-xl border p-3"><input type="checkbox" checked={chosen.includes(x)} onChange={e=>setChecked(v=>e.target.checked?[...v,x]:v.filter(y=>y!==x))}/>{x}</label>)}</div><button disabled={!chosen.length} onClick={download} className="mt-5 rounded-xl bg-blue-700 px-6 py-3 font-bold text-white disabled:opacity-50">Télécharger mon brouillon</button><Link href="/deshboard" className="ml-3 inline-block text-blue-700 underline">Créer le devis complet</Link></div></div></main>}
