@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 
 
 const legalLinks = [
+  {href:"/resilier-votre-contrat",label:"Résilier votre contrat"},
   { href: "/pricing", label: "Tarifs" },
   { href: "/terms", label: "Conditions d’utilisation" },
   { href: "/privacy", label: "Confidentialité" },

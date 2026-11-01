@@ -41,9 +41,9 @@ export default function RefundPage() {
             <p className="mt-2">Les offres Pro et Business sont prévues comme des abonnements mensuels renouvelés automatiquement jusqu’à résiliation.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">2. Annulation</h2>
-            <p className="mt-2">Pour les abonnements traités par PayPal, vous pouvez annuler le paiement automatique depuis votre compte PayPal ou demander une assistance à ALEK. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
+            <p className="mt-2">Pour les abonnements traités par PayPal, vous pouvez résilier en ligne depuis « Résilier votre contrat », annuler le paiement automatique dans PayPal ou contacter le support. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">3. Remboursements et droit de rétractation</h2>
+          <p><a href="/resilier-votre-contrat" className="font-bold text-blue-700 underline">Résilier votre contrat en ligne</a></p><section><h2 className="text-xl font-bold text-stone-900">3. Remboursements et droit de rétractation</h2>
             <p className="mt-2">Toute demande de remboursement est examinée par ALEK selon le service fourni, les conditions de vente applicables et les droits impératifs du client. Les droits légaux de rétractation éventuellement applicables aux consommateurs de l'Union européenne restent réservés.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">4. Demander un remboursement</h2>

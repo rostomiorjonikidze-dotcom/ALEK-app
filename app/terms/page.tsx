@@ -57,9 +57,9 @@ export default function TermsPage() {
             <p className="mt-2">Les abonnements payants sont traités via PayPal lorsqu'ils sont activés. PayPal intervient comme prestataire de paiement ; ALEK fournit le service logiciel. Les abonnements se renouvellent jusqu'à résiliation selon les informations présentées lors de la souscription.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">7. Résiliation</h2>
-            <p className="mt-2">Pour résilier un abonnement PayPal, utilisez vos paramètres de paiements automatiques PayPal ou contactez ALEK via l'adresse de support figurant sur le site. Sous réserve des dispositions impératives, la résiliation s'applique à la prochaine échéance.</p>
+            <p className="mt-2">Pour résilier, utilisez la page « Résilier votre contrat » du site, les paramètres PayPal ou contactez le support. Sous réserve des dispositions impératives, la résiliation s'applique à la prochaine échéance.</p>
           </section>
-          <section><h2 className="text-xl font-bold text-stone-900">8. Propriété intellectuelle</h2>
+          <p><a href="/resilier-votre-contrat" className="font-bold text-blue-700 underline">Résilier votre contrat en ligne</a></p><section><h2 className="text-xl font-bold text-stone-900">8. Propriété intellectuelle</h2>
             <p className="mt-2">ALEK, son interface, son logo, ses composants logiciels et ses contenus propres sont protégés. L’utilisateur conserve ses droits sur les informations qu’il saisit et reste responsable de disposer des droits nécessaires sur ces données.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">9. Disponibilité</h2>
