@@ -630,6 +630,7 @@ export default function LoginPage() {
             </div>
           )}
 
+          {mode === "login" && message && <button type="button" onClick={()=>{setMessage("");void handleSubmit();}} style={{border:"1px solid #bfdbfe",background:"#eff6ff",color:"#1d4ed8",borderRadius:10,padding:12,fontWeight:700,cursor:"pointer"}}>{t.loginButton} →</button>}
           {mode === "login" && !recoveryMode && <button type="button" onClick={()=>{setMessage("");setRecoveryMode(true);}} style={{border:0,background:"transparent",color:"#1677ff",padding:"9px",cursor:"pointer"}}>{recoveryLabels[0]}</button>}
           <button
             type="button"
