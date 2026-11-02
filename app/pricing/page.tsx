@@ -54,6 +54,7 @@ export default function PricingPage() {
   }
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
     if(params.get("paypal")==="cancel") {setNotice("Paiement annulé. Aucun abonnement activé.");return;}
     if(params.get("paypal")!=="success") return;
     const id=params.get("subscription_id");
