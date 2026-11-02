@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Existing dynamic integration; tracked for typed/lifecycle refactor.
     const { data: reserveData, error: reserveError } = await (admin as any).rpc(
       "reserve_ai_usage",
       { p_user_id: user.id },
@@ -233,6 +234,7 @@ Transforme ce texte en contenu professionnel pour devis/facture.
     console.error("AI route error:", error);
 
     if (admin && reservedUserId && usageWasReserved) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Existing dynamic integration; tracked for typed/lifecycle refactor.
       const { error: refundError } = await (admin as any).rpc("refund_ai_usage", {
         p_user_id: reservedUserId,
       });
