@@ -21,12 +21,13 @@ export async function GET(request: NextRequest) {
     const payload = await response.json();
     const results = Array.isArray(payload?.results) ? payload.results : [];
 
+    type CompanyRecord = {siren?:string; siege?:{siret?:string;nom_commercial?:string}; matching_etablissements?:Array<{siret?:string}>; [key:string]:unknown};
     const company =
-      results.find((item: any) => {
+      results.find((item: CompanyRecord) => {
         if (identifier.length === 9) return String(item?.siren || "") === identifier;
         if (String(item?.siege?.siret || "") === identifier) return true;
         return Array.isArray(item?.matching_etablissements)
-          ? item.matching_etablissements.some((e: any) => String(e?.siret || "") === identifier)
+          ? item.matching_etablissements.some((e: {siret?:string}) => String(e?.siret || "") === identifier)
           : false;
       }) || results[0];
 
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     const establishment =
       identifier.length === 14
         ? (Array.isArray(company?.matching_etablissements)
-            ? company.matching_etablissements.find((e: any) => String(e?.siret || "") === identifier)
+            ? company.matching_etablissements.find((e: {siret?:string}) => String(e?.siret || "") === identifier)
             : null) || (String(company?.siege?.siret || "") === identifier ? company.siege : null)
         : company?.siege;
 
