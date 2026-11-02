@@ -29,19 +29,19 @@ export async function POST(request: NextRequest) {
   let usageWasReserved = false;
 
   try {
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error("Missing Supabase server environment variables");
-      return NextResponse.json(
-        { error: "Configuration serveur incomplète." },
-        { status: 500 },
-      );
-    }
-
     const accessToken = getBearerToken(request);
     if (!accessToken) {
       return NextResponse.json(
         { error: "Authentification requise." },
         { status: 401 },
+      );
+    }
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error("Missing Supabase server environment variables");
+      return NextResponse.json(
+        { error: "Configuration serveur incomplète." },
+        { status: 500 },
       );
     }
 

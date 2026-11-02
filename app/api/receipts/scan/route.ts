@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         method: "POST", cache: "no-store",
         headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b",
+          model: process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct",
           temperature: 0,
           max_completion_tokens: 1200,
           response_format: { type: "json_object" },

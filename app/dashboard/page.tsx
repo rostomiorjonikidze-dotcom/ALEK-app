@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
 
@@ -439,14 +441,6 @@ const translations = {
   },
 } as const;
 
-const languageNames: Record<Lang, string> = {
-  ka: "🇬🇪 ქართული",
-  ru: "🇷🇺 Русский",
-  fr: "🇫🇷 Français",
-  de: "🇩🇪 Deutsch",
-  ar: "🇸🇦 العربية",
-};
-
 function todayInput() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
@@ -490,6 +484,7 @@ function serviceTotal(item: ServiceItem) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [siteLang, setSiteLang] = useState<Lang>("fr");
   const [inputLang, setInputLang] = useState<Lang>("fr");
   const t = translations[siteLang];
@@ -680,9 +675,9 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    void loadProfile();
+    void loadProfile(router);
     void loadDocuments();
-  }, []);
+  }, [router]);
 
   function nextDocumentNumber(type: DocumentType) {
     const key = type === "devis" ? "alek-devis-counter" : "alek-invoice-counter";
@@ -692,11 +687,11 @@ export default function Home() {
     return `${prefix}-${new Date().getFullYear()}-${String(next).padStart(3, "0")}`;
   }
 
-  async function loadProfile() {
+  async function loadProfile(router: ReturnType<typeof useRouter>) {
     const { data: authData } = await supabase.auth.getUser();
     const user = authData.user;
     if (!user) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
     setUserEmail(user.email || "");
@@ -780,7 +775,8 @@ export default function Home() {
 
   async function logout() {
     await supabase.auth.signOut();
-    window.location.href = "/";
+    router.replace("/");
+    router.refresh();
   }
 
   function createNewDevis() {
@@ -845,7 +841,7 @@ export default function Home() {
       const accessToken = sessionData.session?.access_token;
 
       if (!accessToken) {
-        window.location.href = "/login";
+        router.push("/login");
         return;
       }
 
@@ -868,7 +864,7 @@ export default function Home() {
       }
 
       if (response.status === 401) {
-        window.location.href = "/login";
+        router.push("/login");
         return;
       }
 
@@ -1246,7 +1242,7 @@ export default function Home() {
         {mobileMenuOpen && <button type="button" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} className="fixed inset-0 z-40 bg-[#06142b]/60 lg:hidden" />}
         <aside className={`fixed bottom-0 left-0 top-0 z-50 w-[252px] overflow-y-auto bg-[#071a3b] p-5 text-white shadow-[12px_0_38px_rgba(7,26,59,.12)] transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="mb-7 flex items-center gap-3 px-2"><button type="button" onClick={()=>setMobileMenuOpen(false)} aria-label="Fermer" className="ml-auto order-last rounded-lg px-2 py-1 text-xl text-blue-100 lg:hidden">×</button>
-            <img src="/alek-logo.png" alt="ALEK" className="h-11 w-11 rounded-xl object-cover" />
+            <Image src="/alek-logo.png" alt="ALEK" width={44} height={44} className="h-11 w-11 rounded-xl object-cover" />
             <div>
               <p className="text-xl font-extrabold tracking-wide">ALEK</p>
               {userRole === "owner" && <p className="text-xs font-semibold text-blue-300">OWNER • ∞</p>}
@@ -1272,7 +1268,7 @@ export default function Home() {
 
         <div className="mb-5 flex flex-col gap-5 rounded-[28px] border border-blue-100 bg-gradient-to-r from-[#e9f2ff] via-white to-[#f3f7ff] p-5 shadow-[0_16px_40px_rgba(24,68,140,0.08)] sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <img src="/alek-logo.png" alt="ALEK" className="h-12 w-12 rounded-xl object-cover" />
+            <Image src="/alek-logo.png" alt="ALEK" width={48} height={48} className="h-12 w-12 rounded-xl object-cover" />
             <div>
               <p className="text-xl font-extrabold tracking-wide">{t.appName}</p>
               <p className="mt-1 max-w-2xl text-sm text-stone-500">{t.subtitle}</p>

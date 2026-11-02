@@ -3,7 +3,7 @@ import test from "node:test";
 
 const base = process.env.ALEK_BASE_URL || "https://app.alek.best";
 const publicPaths = [
-  "/", "/login", "/pricing", "/deshboard", "/a-propos",
+  "/", "/login", "/pricing", "/dashboard", "/a-propos",
   "/contact", "/privacy", "/terms", "/refund", "/mentions-legales",
 ];
 

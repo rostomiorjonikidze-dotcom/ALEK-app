@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ALEK Artisan
 
-## Getting Started
+Application Next.js (App Router) de devis, factures et gestion documentaire pour les
+professionnels en France : assistant IA de rédaction, génération de PDF, suivi financier,
+signature simple de devis et gestion des abonnements PayPal.
 
-First, run the development server:
+## Prérequis
+
+- Node.js 22+
+- Un projet Supabase (authentification + tables `profiles`, `documents`,
+  `artisan_clients`, `artisan_catalog`, `artisan_expenses`, `artisan_signature_requests`
+  et les fonctions RPC `reserve_ai_usage` / `refund_ai_usage`)
+- Une clé API Groq pour l'assistant IA
+- Des identifiants PayPal (sandbox ou live) pour les abonnements
+
+## Installation
 
 ```bash
+npm ci
+cp .env.example .env.local
+# renseignez les valeurs dans .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+L'application est disponible sur [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Variables d'environnement
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Voir [.env.example](.env.example). Aucune valeur secrète ne doit être commitée.
 
-## Learn More
+| Variable | Portée | Rôle |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | client + serveur | URL du projet Supabase |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | client | Clé publique Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | serveur uniquement | Accès administration Supabase |
+| `GROQ_API_KEY` | serveur uniquement | Clé API Groq |
+| `GROQ_VISION_MODEL` | serveur | Modèle vision (photos, reçus) |
+| `PAYPAL_ENV` | serveur | `sandbox` ou `live` |
+| `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` | serveur | Identifiants PayPal |
+| `PAYPAL_PRO_PLAN_ID` / `PAYPAL_BUSINESS_PLAN_ID` | serveur | Plans d'abonnement vérifiés |
 
-To learn more about Next.js, take a look at the following resources:
+Le build ne nécessite aucune variable : le client Supabase navigateur est créé à la
+première utilisation (voir `app/lib/supabase.ts`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Commande | Description |
+| --- | --- |
+| `npm run dev` | Serveur de développement |
+| `npm run build` | Build de production |
+| `npm start` | Serveur de production |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | `next typegen` puis `tsc --noEmit` |
+| `npm test` | Tests des modèles de conformité française |
 
-## Deploy on Vercel
+## Tests
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `tests/pro-compliance.test.mjs` — modèles de conformité (exécutable hors ligne).
+- `tests/public-smoke.test.mjs` — vérifie les pages publiques déployées et le contrôle
+  d'authentification de `/api/ai`. Lancez-le après un déploiement :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+ALEK_BASE_URL=https://app.alek.best node --test tests/public-smoke.test.mjs
+```
+
+Les deux suites tournent dans GitHub Actions (`.github/workflows/public-smoke.yml`), avec
+en plus `lint`, `typecheck` et `build`.

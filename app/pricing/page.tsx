@@ -3,7 +3,8 @@ import SiteHeader from "../components/SiteHeader";
 
 import { LEGAL } from "../legal-config";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 
@@ -37,16 +38,18 @@ function Footer() {
 
 
 export default function PricingPage() {
+  const router = useRouter();
   const [loading,setLoading]=useState<string|null>(null);
   const [notice,setNotice]=useState("");
-  async function callPayPal(path:string,body:object) {
+  const callPayPal = useCallback(async (path:string,body:object) => {
     const {data:{session}}=await supabase.auth.getSession();
-    if(!session) { window.location.href="/login"; return null; }
+    if(!session) { router.push("/login"); return null; }
     const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body)});
     const result=await response.json();
-    if(!response.ok) throw new Error(result.error||"PayPal unavailable");
-    return result;
-  }
+    if(!response.ok) throw new Error(result.error||"PayPal unavailable");    return result;
+  }, [router]);
+
+
   async function start(plan:"pro"|"business") {
     setLoading(plan);setNotice("");
     try { const result=await callPayPal("/api/paypal/checkout",{plan}); if(result?.url) window.location.assign(result.url); }
@@ -63,7 +66,7 @@ export default function PricingPage() {
     void callPayPal("/api/paypal/sync",{subscriptionId:id}).then(result=>{
       if(result) setNotice(result.status==="ACTIVE"?"Abonnement activé avec succès.":"Paiement en attente de confirmation PayPal.");
     }).catch(e=>setNotice(e instanceof Error?e.message:"Vérification impossible")).finally(()=>setLoading(null));
-  },[]);
+  },[callPayPal]);
   return (
     <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
       <SiteHeader />

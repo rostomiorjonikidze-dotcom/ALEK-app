@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
 import { supabase } from "../lib/supabase";
 import { buildTemplate, checkCompliance, paymentClauses, reminder, type ClientKind, type ComplianceInput, type TemplateKind } from "../lib/pro-compliance";
@@ -27,6 +28,7 @@ function downloadText(content:string,name:string){const blob=new Blob([content],
 function Field({title,children}:{title:string;children:React.ReactNode}){return <label className="block space-y-2 text-sm font-semibold text-slate-700"><span>{title}</span>{children}</label>;}
 function money(value:unknown){return Number(value||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});}
 export default function ProToolsPage(){
+  const router = useRouter();
   const [tab,setTab]=useState<Tab>("scanner");
   const [userId,setUserId]=useState("");
   const [documents,setDocuments]=useState<Doc[]>([]);
@@ -51,7 +53,7 @@ export default function ProToolsPage(){
     void (async()=>{
       const {data:{user}}=await supabase.auth.getUser();
       if(!active)return;
-      if(!user){window.location.assign("/login");return;}
+      if(!user){router.push("/login");return;}
       setUserId(user.id);
       const [d,e]=await Promise.all([
         supabase.from("documents").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(100),
@@ -63,7 +65,7 @@ export default function ProToolsPage(){
       if(!e.error)setExpenses(e.data||[]);
     })();
     return()=>{active=false;};
-  },[]);
+  },[router]);
   const checks=useMemo(()=>{
     if(!selectedDoc)return [];
     const d=selectedDoc;
@@ -142,7 +144,7 @@ export default function ProToolsPage(){
   }
   const docSelector=<select className={inputClass} value={selected} onChange={e=>{setSelected(e.target.value);setSignatureLink("");}}><option value="">Choisir un document enregistré</option>{documents.map(doc=><option key={doc.id} value={doc.id}>{doc.document_type==="devis"?"Devis":"Facture"} {doc.document_number||"sans numéro"} · {doc.client_name||"Sans client"}</option>)}</select>;
   return <main className="min-h-screen bg-[#f3f6fc] text-[#14213b]"><SiteHeader/>
-    <section className="bg-gradient-to-br from-[#06162e] via-[#143770] to-[#1d57ad] px-5 py-14 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-bold uppercase tracking-[.2em] text-blue-200">ALEK ARTISAN · OUTILS PROFESSIONNELS</p><h1 className="mt-4 text-4xl font-black sm:text-5xl">Gérez vos documents en confiance.</h1><p className="mt-4 max-w-3xl text-blue-100">OCR des dépenses, contrôle des mentions, documents français, relances et devis à signer. Vos décisions restent sous votre contrôle.</p><Link href="/deshboard" className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#143770]">← Retour à mes devis et factures</Link></div></section>
+    <section className="bg-gradient-to-br from-[#06162e] via-[#143770] to-[#1d57ad] px-5 py-14 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-bold uppercase tracking-[.2em] text-blue-200">ALEK ARTISAN · OUTILS PROFESSIONNELS</p><h1 className="mt-4 text-4xl font-black sm:text-5xl">Gérez vos documents en confiance.</h1><p className="mt-4 max-w-3xl text-blue-100">OCR des dépenses, contrôle des mentions, documents français, relances et devis à signer. Vos décisions restent sous votre contrôle.</p><Link href="/dashboard" className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#143770]">← Retour à mes devis et factures</Link></div></section>
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" role="tablist" aria-label="Outils professionnels">{tabs.map(t=><button key={t.key} role="tab" aria-selected={tab===t.key} onClick={()=>{setTab(t.key);setMessage("");if(t.key==="signature")void refreshSignatures();}} className={"rounded-2xl border px-4 py-4 text-left text-sm font-bold shadow-sm transition "+(tab===t.key?"border-blue-700 bg-blue-700 text-white":"border-blue-100 bg-white text-blue-900 hover:border-blue-400")}><span className="mr-2 text-lg">{t.icon}</span>{t.name}</button>)}</div>
       {message&&<div role="status" className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">{message}</div>}

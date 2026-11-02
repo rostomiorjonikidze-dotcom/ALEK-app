@@ -1,7 +1,8 @@
 import type { MetadataRoute } from "next";
+import { SITE_URL } from "./lib/site-url";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://app.alek.best";
+  const base = SITE_URL;
   const paths = ["", "/pricing", "/terms", "/privacy", "/refund", "/cookies", "/mentions-legales", "/contact"];
   return paths.map((path) => ({
     url: `${base}${path}`,

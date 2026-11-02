@@ -336,7 +336,7 @@ export default function LoginPage() {
           return;
         }
 
-        router.push("/deshboard");
+        router.push("/dashboard");
         router.refresh();
       }
     } finally {

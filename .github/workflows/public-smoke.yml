@@ -10,6 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
   public-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -22,7 +44,9 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - name: Validate French compliance templates\n        run: node --experimental-strip-types --test tests/pro-compliance.test.mjs\n      - name: Verify live public pages and AI auth gate
+      - name: Validate French compliance templates
+        run: node --experimental-strip-types --test tests/pro-compliance.test.mjs
+      - name: Verify live public pages and AI auth gate
         env:
           ALEK_BASE_URL: https://app.alek.best
         run: node --test tests/public-smoke.test.mjs
