@@ -44,7 +44,7 @@ export default function RefundPage() {
             <p className="mt-2">Pour les abonnements traités par PayPal, vous pouvez résilier en ligne depuis « Résilier votre contrat », annuler le paiement automatique dans PayPal ou contacter le support. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
           </section>
           <p><a href="/resilier-votre-contrat" className="font-bold text-blue-700 underline">Résilier votre contrat en ligne</a></p><section><h2 className="text-xl font-bold text-stone-900">3. Remboursements et droit de rétractation</h2>
-            <p className="mt-2">Toute demande de remboursement est examinée par ALEK selon le service fourni, les conditions de vente applicables et les droits impératifs du client. Les droits légaux de rétractation éventuellement applicables aux consommateurs de l'Union européenne restent réservés.</p>
+            <p className="mt-2">Toute demande de remboursement est examinée par ALEK selon le service fourni, les conditions de vente applicables et les droits impératifs du client. Les droits légaux de rétractation éventuellement applicables aux consommateurs de l&apos;Union européenne restent réservés.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">4. Demander un remboursement</h2>
             <p className="mt-2">Pour une transaction PayPal, conservez votre référence de paiement et contactez {LEGAL.supportEmail} pour demander l’examen du dossier. Vous pouvez également consulter vos paiements automatiques dans votre compte PayPal.</p>
