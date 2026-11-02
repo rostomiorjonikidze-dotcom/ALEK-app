@@ -6,9 +6,9 @@ export const runtime = "nodejs";
 const kinds = ["cgv","cgu","contrat-prestation","contrat-vente","sous-traitance","nda","rgpd","politique-confidentialite","mentions-legales","contrat-travail","avenant","lettre-mise-en-demeure","resiliation","bail","cession-droits","partenariat","licence-logiciel","devis","autre"];
 export async function POST(req:NextRequest){
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY,groqKey=process.env.GROQ_API_KEY;
-  if(!url||!key||!groqKey)return NextResponse.json({error:"Configuration IA indisponible."},{status:503});
   const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim();
   if(!token)return NextResponse.json({error:"Connexion requise."},{status:401});
+  if(!url||!key||!groqKey)return NextResponse.json({error:"Configuration IA indisponible."},{status:503});
   const db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
   const {data:{user},error}=await db.auth.getUser(token);
   if(error||!user)return NextResponse.json({error:"Session expirée."},{status:401});
