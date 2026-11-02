@@ -15,7 +15,7 @@ export async function POST(request:Request) {
   const planResponse=await fetch(paypalBase()+"/v1/billing/plans/"+encodeURIComponent(planId),{headers:{Authorization:"Bearer "+accessToken},cache:"no-store"});
   if(!planResponse.ok) return NextResponse.json({error:"Impossible de vérifier le tarif PayPal. Réessayez plus tard."},{status:503});
   const paypalPlan=await planResponse.json();
-  const expected=plan==="pro"?"9.99":"19.99";
+  const expected=plan==="pro"?"19.99":"49.99";
   const cycles=Array.isArray(paypalPlan.billing_cycles)?paypalPlan.billing_cycles:[];
   const regular=cycles.find((cycle:{tenure_type?:string})=>cycle.tenure_type==="REGULAR");
   const fixed=regular?.pricing_scheme?.fixed_price;
