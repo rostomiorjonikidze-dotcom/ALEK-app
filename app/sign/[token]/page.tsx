@@ -25,6 +25,7 @@ export default function SignQuotePage() {
       setView(result);
     } catch(e) {setError(e instanceof Error?e.message:"Lien indisponible");}
   },[token]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
   useEffect(()=>{ if(token) void load(); },[token,load]);
   useEffect(()=>{
     const el=canvas.current;

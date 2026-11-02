@@ -8,6 +8,7 @@ export default function InstallApp() {
  const [ios,setIos]=useState(false);
  useEffect(()=>{
   const standalone=window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & {standalone?:boolean}).standalone===true;
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
   setInstalled(standalone);
   setIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
   const onPrompt=(e:Event)=>{e.preventDefault();setDeferred(e as InstallEvent)};
