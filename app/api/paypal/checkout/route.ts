@@ -24,7 +24,7 @@ export async function POST(request:Request) {
   if(paypalPlan.status!=="ACTIVE" || !monthly || fixed?.currency_code!=="EUR" || !Number.isFinite(actual) || Math.abs(actual-Number(expected))>0.001) return NextResponse.json({error:"Le tarif PayPal de cette formule n’est pas encore synchronisé avec le prix affiché. Aucun paiement n’a été lancé."},{status:503});
   const {data:profile}=await admin().from("profiles").select("role,paypal_subscription_id,paypal_subscription_status").eq("id",user.id).maybeSingle();
   if(profile?.role==="owner") return NextResponse.json({error:"Owner already has full access"},{status:409});
-  if(profile?.paypal_subscription_id && profile?.paypal_subscription_status==="ACTIVE") return NextResponse.json({error:"Manage your existing subscription before creating another"},{status:409});
+  if(profile?.paypal_subscription_id && ["ACTIVE","APPROVAL_PENDING","APPROVED","SUSPENDED"].includes(String(profile?.paypal_subscription_status || "").toUpperCase())) return NextResponse.json({error:"Un abonnement existe déjà ou attend une validation. Vérifiez son statut avant de recommencer afin d’éviter un double abonnement."},{status:409});
   const token=accessToken;
   const response=await fetch(paypalBase()+"/v1/billing/subscriptions",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","PayPal-Request-Id":crypto.randomUUID()},body:JSON.stringify({plan_id:planId,custom_id:user.id,application_context:{brand_name:"ALEK",user_action:"SUBSCRIBE_NOW",return_url:"https://app.alek.best/pricing?paypal=success",cancel_url:"https://app.alek.best/pricing?paypal=cancel"}}),cache:"no-store"});
   const data=await response.json();
