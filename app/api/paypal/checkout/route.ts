@@ -20,7 +20,7 @@ function matchesPrice(plan: PaypalPlan, expected: string): boolean {
   const fixed = regular?.pricing_scheme?.fixed_price;
   return plan.status === "ACTIVE"
     && regular?.frequency?.interval_unit === "MONTH"
-    && Number(regular?.frequency?.interval_count) === 1
+    && Number(regular?.frequency?.interval_count ?? 1) === 1
     && fixed?.currency_code === "EUR"
     && Number.isFinite(Number(fixed?.value))
     && Math.abs(Number(fixed?.value) - Number(expected)) < 0.001;
