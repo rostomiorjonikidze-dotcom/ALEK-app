@@ -49,6 +49,8 @@ type SavedDocument = {
   description: string | null;
   services: ServiceItem[] | null;
   vat_rate: number | string | null;
+  vat_exempt?: boolean | null;
+  client_is_professional?: boolean | null;
   total_ht: number | string | null;
   total_vat: number | string | null;
   total_ttc: number | string | null;
@@ -928,6 +930,8 @@ export default function Home() {
       description: frenchText || null,
       services,
       vat_rate: vatRate,
+      vat_exempt: vatExemptionConfirmed,
+      client_is_professional: clientIsProfessional,
       total_ht: totalHT,
       total_vat: vatAmount,
       total_ttc: totalTTC,
@@ -959,7 +963,7 @@ export default function Home() {
           .eq("id", selectedDocumentId).eq("user_id", user.id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.rpc("issue_artisan_document", { p_payload: payload });
+        const { data, error } = await supabase.rpc("issue_artisan_document_v2", { p_payload: payload });
         if (error) throw error;
         const issued = data as { id?: string; document_number?: string } | null;
         if (!issued?.id || !issued.document_number) throw new Error("Numérotation indisponible");
@@ -995,6 +999,8 @@ export default function Home() {
     setDescription(doc.description || "");
     setServices(Array.isArray(doc.services) ? doc.services.map(normalizeService) : []);
     setVatRate(Number(doc.vat_rate) || 0);
+    setVatExemptionConfirmed(Boolean(doc.vat_exempt));
+    setClientIsProfessional(Boolean(doc.client_is_professional));
 
     if (doc.document_type === "facture") {
       setInvoiceNumber(doc.document_number || "");
@@ -1035,6 +1041,10 @@ export default function Home() {
     if (!businessName.trim() || !businessSiret.trim()) {
       alert("Renseignez le nom de votre entreprise et votre SIRET.");
       scrollToSection("settings-section");
+      return false;
+    }
+    if (vatExemptionConfirmed && vatRate !== 0) {
+      alert("La franchise en base de TVA nécessite un taux à 0 %.");
       return false;
     }
     if (!services.length || services.some(item => !item.description.trim() || !Number.isFinite(item.price) || item.price < 0)) {
