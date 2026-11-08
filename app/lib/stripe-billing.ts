@@ -8,6 +8,7 @@ export const STRIPE_ORIGIN = "https://api.stripe.com";
 export function stripeConfigured(): boolean {
   const sk=process.env.STRIPE_SECRET_KEY || "";
   const pk=process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
+  if (process.env.VERCEL_ENV==="production" && !sk.startsWith("sk_live_")) return false;
   return /^sk_(test|live)_/.test(sk)
     && /^pk_(test|live)_/.test(pk)
     && sk.slice(3,7) === pk.slice(3,7)
