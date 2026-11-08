@@ -9,6 +9,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
+import { NotoSansBase64 } from "../lib/notosans-font";
+import { NotoSansGeorgianBase64 } from "../lib/notosansgeorgian-font";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -1060,6 +1062,12 @@ export default function Home() {
     if(vatExemptionConfirmed && vatRate!==0){alert("La franchise en base de TVA nécessite un taux de TVA à 0 %.");return;}
     if(vatRate===0 && !vatExemptionConfirmed && !window.confirm("TVA à 0 % : confirmez que votre régime de TVA ou l’exonération applicable est correctement documenté. Continuer sans mention article 293 B ?"))return;
     const doc = new jsPDF();
+    doc.addFileToVFS("NotoSans-Regular.ttf", NotoSansBase64);
+    doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", NotoSansGeorgianBase64);
+    doc.addFont("NotoSansGeorgian-Regular.ttf", "NotoGeorgian", "normal");
+    const hasGeorgian = (value: string) => /[\u10a0-\u10ff\u1c90-\u1cbf]/u.test(value);
+    const setPdfFont = (value: string) => doc.setFont(hasGeorgian(value) ? "NotoGeorgian" : "NotoSans", "normal");
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const left = 18;
@@ -1071,7 +1079,7 @@ export default function Home() {
     const textBlock = (label: string, value: string, x: number, y: number, width: number) => {
       doc.setFont("helvetica", "bold");
       doc.text(label, x, y);
-      doc.setFont("helvetica", "normal");
+      setPdfFont(safe(value));
       const lines = doc.splitTextToSize(safe(value), width) as string[];
       doc.text(lines, x, y + 6);
       return y + 6 + lines.length * 5;
@@ -1083,6 +1091,7 @@ export default function Home() {
     doc.setFontSize(21);
     doc.text(documentType === "facture" ? "FACTURE" : "DEVIS", left, 22);
     doc.setFontSize(10);
+    setPdfFont(safe(number));
     doc.text(safe(number), right, 22, { align: "right" });
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(10);
@@ -1098,6 +1107,7 @@ export default function Home() {
     let companyY = textBlock("ÉMETTEUR", businessName, left + 4, 73, 75);
     for (const line of [businessAddress, businessPhone, businessEmail, `SIRET : ${safe(businessSiret)}`]) {
       if (companyY > 115) break;
+      setPdfFont(safe(line));
       const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
       doc.text(wrapped, left + 4, companyY);
       companyY += wrapped.length * 4.5;
@@ -1105,18 +1115,20 @@ export default function Home() {
     let clientY = textBlock("CLIENT", clientName, 112, 73, 75);
     for (const line of [clientAddress, clientPhone, clientEmail]) {
       if (clientY > 115) break;
+      setPdfFont(safe(line));
       const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
       doc.text(wrapped, 112, clientY);
       clientY += wrapped.length * 4.5;
     }
 
+    setPdfFont(safe(frenchText));
     const descriptionLines = doc.splitTextToSize(safe(frenchText), 174) as string[];
     let descriptionY = 133;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("Description des travaux", left, descriptionY);
     descriptionY += 7;
-    doc.setFont("helvetica", "normal");
+    setPdfFont(safe(frenchText));
     doc.setFontSize(9);
     for (const line of descriptionLines) {
       if (descriptionY > pageHeight - 32) { doc.addPage(); descriptionY = 24; }
@@ -1128,14 +1140,15 @@ export default function Home() {
     autoTable(doc, {
       startY: descriptionY + 6,
       margin: { left, right: 18, top: 20, bottom: 22 },
-      head: [["Description", "Qté / Heures", "Prix unitaire", "Total HT"]],
+      head: [["Description", "Qté / Heures", "Prix", "Total HT"]],
       body: services.map(item => [
         safe(item.description),
         item.priceType === "hourly" ? `${item.hours} h` : String(item.quantity),
-        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : ""}`,
+        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : item.priceType === "unit" ? "/u" : " (total)"}`,
         `${serviceTotal(item).toFixed(2)} EUR`,
       ]),
-      styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+      styles: { font: "NotoSans", fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+      didParseCell: (cell) => { if (hasGeorgian(String(cell.cell.text.join(" ")))) cell.cell.styles.font = "NotoGeorgian"; },
       headStyles: { fillColor: [27, 72, 144] },
       alternateRowStyles: { fillColor: [246, 249, 253] },
       columnStyles: { 0: { cellWidth: 78 }, 1: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 34 } },
@@ -1148,24 +1161,25 @@ export default function Home() {
     doc.text(`TVA (${vatRate} %) : ${vatAmount.toFixed(2)} EUR`, right, y + 8, { align: "right" });
     doc.setFillColor(231, 240, 255);
     doc.roundedRect(92, y + 13, 100, 16, 2, 2, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(13);
     doc.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, right - 4, y + 24, { align: "right" });
-    y += 40;
-    doc.setFont("helvetica", "normal");
+    y += 34;
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(9);
     const details = documentType === "facture"
       ? [paymentTerms && `Conditions de paiement : ${paymentTerms}`, paymentMethod && `Mode de paiement : ${paymentMethod}`, `Statut : ${invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée"}`].filter(Boolean) as string[]
       : [];
     if(documentType==="facture"){
       details.push(...paymentClauses(clientIsProfessional?"professionnel":"particulier",30,vatExemptionConfirmed));
-      if(clientIsProfessional)details.push("Référence : article D. 441-5 du Code de commerce (indemnité forfaitaire de recouvrement).");
+      // The 40 EUR clause above already includes its legal reference.
     }
     for (const detail of details) {
       const lines = doc.splitTextToSize(detail, 170) as string[];
       if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
+      setPdfFont(detail);
       doc.text(lines, left, y);
-      y += lines.length * 5 + 3;
+      y += lines.length * 5 + 2;
     }
     const pageCount = doc.getNumberOfPages();
     for (let page = 1; page <= pageCount; page++) {
@@ -1356,7 +1370,7 @@ export default function Home() {
 
           <section id="settings-section" className={`scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)] ${editorStep === 2 ? "" : "hidden"}`}>
             <div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-blue-50 p-3 text-xl">💶</div><div><p className="text-sm font-semibold text-blue-700">Tarification</p><h2 className="text-2xl font-extrabold">{t.pricing}</h2></div></div>
-            <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>setVatExemptionConfirmed(e.target.checked)}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
+            <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>{setVatExemptionConfirmed(e.target.checked);if(e.target.checked)setVatRate(0);}}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} disabled={vatExemptionConfirmed} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
             <div className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.materials}</p><p className="mt-1 text-2xl font-bold">{materialFromServices.toFixed(2)} €</p></div><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.laborTotal}</p><p className="mt-1 text-2xl font-bold">{laborFromServices.toFixed(2)} €</p></div></div>
             <div className="mt-4 rounded-2xl bg-[#f8efe5] p-5"><div className="flex justify-between"><span>HT</span><b>{totalHT.toFixed(2)} €</b></div><div className="mt-2 flex justify-between"><span>TVA ({vatRate}%)</span><b>{vatAmount.toFixed(2)} €</b></div><div className="mt-3 flex items-center justify-between border-t pt-3"><span className="text-lg font-bold">TTC</span><span className="text-3xl font-black">{totalTTC.toFixed(2)} €</span></div></div>
             <p className="mt-4 text-xs leading-5 text-slate-500">Vérifiez les coordonnées du client, les prestations et la TVA avant l’enregistrement ou l’export PDF.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="rounded-xl bg-emerald-600 px-5 py-4 font-bold text-white hover:bg-emerald-700">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="rounded-xl bg-stone-800 px-5 py-4 font-bold text-white hover:bg-stone-700">{t.createPdf}</button></div>
@@ -1364,7 +1378,7 @@ export default function Home() {
 
           <section className="rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <h2 className="text-center text-2xl font-bold">{t.plans}</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "9,99 €" : "19,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Souscrire avec PayPal →</a>}</div>)}</div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Souscrire avec PayPal →</a>}</div>)}</div>
           </section>
 
           <footer className="pb-4 pt-2 text-center text-sm text-stone-500">
