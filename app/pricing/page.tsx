@@ -3,9 +3,8 @@ import SiteHeader from "../components/SiteHeader";
 
 import { LEGAL } from "../legal-config";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import {useCallback,useState} from "react";
+import EmbeddedCardCheckout from "../components/EmbeddedCardCheckout";
 
 
 const legalLinks = [
@@ -38,35 +37,17 @@ function Footer() {
 
 
 export default function PricingPage() {
-  const router = useRouter();
-  const [loading,setLoading]=useState<string|null>(null);
+  const [selectedPlan,setSelectedPlan]=useState<"pro"|"business"|null>(null);
   const [notice,setNotice]=useState("");
-  const callPayPal = useCallback(async (path:string,body:object) => {
-    const {data:{session}}=await supabase.auth.getSession();
-    if(!session) { router.push("/login"); return null; }
-    const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body)});
-    const result=await response.json();
-    if(!response.ok) throw new Error(result.error||"Service PayPal indisponible");    return result;
-  }, [router]);
-
-
-  async function start(plan:"pro"|"business") {
-    setLoading(plan);setNotice("");
-    try { const result=await callPayPal("/api/paypal/checkout",{plan}); if(result?.url) window.location.assign(result.url); }
-    catch(e) {setNotice(e instanceof Error?e.message:"Paiement indisponible");setLoading(null);}
+  const onPaymentDone=useCallback((message:string)=>{
+    setNotice(message);
+    document.getElementById("paiement-par-carte")?.scrollIntoView({behavior:"smooth",block:"start"});
+  },[]);
+  function start(plan:"pro"|"business"){
+    setNotice("");
+    setSelectedPlan(plan);
+    window.requestAnimationFrame(()=>document.getElementById("paiement-par-carte")?.scrollIntoView({behavior:"smooth",block:"start"}));
   }
-  useEffect(()=>{
-    const params=new URLSearchParams(window.location.search);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
-    if(params.get("paypal")==="cancel") {setNotice("Paiement annulé. Aucun abonnement activé.");return;}
-    if(params.get("paypal")!=="success") return;
-    const id=params.get("subscription_id");
-    if(!id) {setNotice("Vérification PayPal en attente. Aucun abonnement activé.");return;}
-    setLoading("verify");
-    void callPayPal("/api/paypal/sync",{subscriptionId:id}).then(result=>{
-      if(result) setNotice(result.status==="ACTIVE"?"Abonnement activé avec succès.":"Paiement en attente de confirmation PayPal.");
-    }).catch(e=>setNotice(e instanceof Error?e.message:"Vérification impossible")).finally(()=>setLoading(null));
-  },[callPayPal]);
   return (
     <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
       <SiteHeader />
@@ -100,10 +81,12 @@ export default function PricingPage() {
               <p className="mt-2 text-sm text-stone-700">✓ {docs}</p>
               <p className="mt-2 text-sm text-stone-700">✓ Création de PDF</p>
               <p className="mt-2 text-sm text-stone-700">✓ Historique des documents {name === "Entreprise" ? "(offre à définir)" : ""}</p>
-              {(name === "Pro" || name === "Business") && <button type="button" disabled={loading!==null} onClick={()=>void start(name==="Pro"?"pro":"business")} className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-50">{loading===name.toLowerCase()?"Connexion à PayPal...":"Souscrire avec PayPal →"}</button>}
+              {(name === "Pro" || name === "Business") && <button type="button" onClick={()=>start(name==="Pro"?"pro":"business")} className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">Payer par carte bancaire →</button>}
             </article>
           ))}
         </section>
+
+        {selectedPlan && <EmbeddedCardCheckout key={selectedPlan} plan={selectedPlan} onDone={onPaymentDone} />}
 
         <section className="mt-7 rounded-3xl border border-blue-100 bg-white p-7">
           <h2 className="text-2xl font-bold">Fonctionnalités principales</h2>
@@ -123,7 +106,7 @@ export default function PricingPage() {
           <h2 className="text-2xl font-bold">Abonnements et paiement</h2>
           <p className="mt-4 leading-7 text-stone-700">
             Les abonnements payants sont mensuels et se renouvellent automatiquement jusqu’à leur résiliation.
-            Les modalités de paiement sont précisées lors de la souscription. Les fonctionnalités Entreprise et les intégrations de facturation électronique ne sont pas encore disponibles.
+            La carte bancaire est saisie sur le site dans un formulaire sécurisé Stripe, sans redirection vers PayPal. Les fonctionnalités Entreprise et les intégrations de facturation électronique ne sont pas encore disponibles.
           </p>
           <p className="mt-3 text-sm text-slate-600">
             Vous pouvez consulter les règles d’annulation et de remboursement sur notre page dédiée.
