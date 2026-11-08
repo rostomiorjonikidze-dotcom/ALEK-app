@@ -45,6 +45,16 @@ const texts = {
   },
 };
 
+function authErrorMessage(message: string): string {
+  if (/invalid login credentials|invalid password|invalid credentials/i.test(message)) return "Adresse e-mail ou mot de passe incorrect.";
+  if (/email not confirmed/i.test(message)) return "Veuillez confirmer votre adresse e-mail avant de vous connecter.";
+  if (/user already registered|already registered/i.test(message)) return "Cette adresse e-mail est déjà utilisée.";
+  if (/password.*(?:weak|short|at least)/i.test(message)) return "Le mot de passe ne respecte pas les critères de sécurité.";
+  if (/rate limit|too many requests|security purposes/i.test(message)) return "Trop de tentatives. Réessayez un peu plus tard.";
+  if (/invalid email/i.test(message)) return "Veuillez saisir une adresse e-mail valide.";
+  return "Opération impossible. Vérifiez vos informations et réessayez.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const captchaRef = useRef<HCaptcha>(null);
@@ -99,7 +109,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password` });
-      if (error) { setMessage(error.message); return; }
+      if (error) { setMessage(authErrorMessage(error.message)); return; }
       setMessage(recoveryLabels[2]);
     } catch { setMessage("Impossible de demander la réinitialisation du mot de passe. Réessayez."); }
     finally { setLoading(false); }
@@ -178,7 +188,7 @@ export default function LoginPage() {
         setCaptchaToken("");
 
         if (error) {
-          setMessage(error.message);
+          setMessage(authErrorMessage(error.message));
           return;
         }
 
@@ -191,7 +201,7 @@ export default function LoginPage() {
         });
 
         if (error) {
-          setMessage(error.message);
+          setMessage(authErrorMessage(error.message));
           return;
         }
 
