@@ -3,7 +3,7 @@ import SiteHeader from "../components/SiteHeader";
 
 import { LEGAL } from "../legal-config";
 import Link from "next/link";
-import {useCallback,useState} from "react";
+import {useCallback,useEffect,useState} from "react";
 import EmbeddedCardCheckout from "../components/EmbeddedCardCheckout";
 
 
@@ -38,6 +38,12 @@ function Footer() {
 
 export default function PricingPage() {
   const [selectedPlan,setSelectedPlan]=useState<"pro"|"business"|null>(null);
+  useEffect(()=>{
+    const requested=new URLSearchParams(window.location.search).get("plan");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Apply an explicit subscription choice from the dashboard link.
+    if(requested==="pro"||requested==="business")setSelectedPlan(requested);
+  },[]);
+
   const [notice,setNotice]=useState("");
   const onPaymentDone=useCallback((message:string)=>{
     setNotice(message);
