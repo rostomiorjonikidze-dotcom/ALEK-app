@@ -36,21 +36,21 @@ async function getPlan(id: string, token: string): Promise<PaypalPlan | null> {
 export async function POST(request: Request) {
   try {
     const user = await userFrom(request);
-    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
     const body = await request.json();
     const tier: Tier | null = body?.plan === "pro" ? "pro" : body?.plan === "business" ? "business" : null;
-    if (!tier) return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
+    if (!tier) return NextResponse.json({ error: "Formule sélectionnée invalide." }, { status: 400 });
     const db = admin();
     const { data: profile, error: profileError } = await db.from("profiles")
       .select("role,paypal_subscription_id,paypal_subscription_status").eq("id", user.id).maybeSingle();
-    if (profileError || !profile) return NextResponse.json({ error: "Profile unavailable" }, { status: 404 });
-    if (profile.role === "owner") return NextResponse.json({ error: "Owner already has full access" }, { status: 409 });
+    if (profileError || !profile) return NextResponse.json({ error: "Profil indisponible." }, { status: 404 });
+    if (profile.role === "owner") return NextResponse.json({ error: "Le compte administrateur dispose déjà de toutes les fonctionnalités." }, { status: 409 });
     if (profile.paypal_subscription_id && ["ACTIVE", "APPROVAL_PENDING", "APPROVED", "SUSPENDED"].includes(String(profile.paypal_subscription_status || "").toUpperCase())) {
       return NextResponse.json({ error: "Un abonnement existe déjà ou attend une validation. Vérifiez son statut avant de recommencer afin d’éviter un double abonnement." }, { status: 409 });
     }
 
     const configuredId = tier === "pro" ? process.env.PAYPAL_PRO_PLAN_ID : process.env.PAYPAL_BUSINESS_PLAN_ID;
-    if (!configuredId) return NextResponse.json({ error: "Plan unavailable" }, { status: 503 });
+    if (!configuredId) return NextResponse.json({ error: "Cette formule n’est pas disponible." }, { status: 503 });
     const env = process.env.PAYPAL_ENV?.toLowerCase() === "live" ? "live" : "sandbox";
     const expected = prices[tier];
     const token = await paypalToken();
@@ -130,6 +130,6 @@ export async function POST(request: Request) {
     if (!response.ok || !valid) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
     return NextResponse.json({ url });
   } catch {
-    return NextResponse.json({ error: "Payment service unavailable" }, { status: 503 });
+    return NextResponse.json({ error: "Le service de paiement est temporairement indisponible." }, { status: 503 });
   }
 }
