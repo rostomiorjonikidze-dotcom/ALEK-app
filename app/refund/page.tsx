@@ -41,13 +41,13 @@ export default function RefundPage() {
             <p className="mt-2">Les offres Pro et Business sont prévues comme des abonnements mensuels renouvelés automatiquement jusqu’à résiliation.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">2. Annulation</h2>
-            <p className="mt-2">Pour les abonnements traités par PayPal, vous pouvez résilier en ligne depuis « Résilier votre contrat », annuler le paiement automatique dans PayPal ou contacter le support. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
+            <p className="mt-2">Pour les abonnements par carte ou les anciens abonnements PayPal, vous pouvez résilier en ligne depuis « Résilier votre contrat » ou contacter le support. Si votre abonnement utilise encore PayPal, vous pouvez également y annuler le paiement automatique. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
           </section>
           <p><a href="/resilier-votre-contrat" className="font-bold text-blue-700 underline">Résilier votre contrat en ligne</a></p><section><h2 className="text-xl font-bold text-stone-900">3. Remboursements et droit de rétractation</h2>
             <p className="mt-2">Toute demande de remboursement est examinée par ALEK selon le service fourni, les conditions de vente applicables et les droits impératifs du client. Les droits légaux de rétractation éventuellement applicables aux consommateurs de l&apos;Union européenne restent réservés.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">4. Demander un remboursement</h2>
-            <p className="mt-2">Pour une transaction PayPal, conservez votre référence de paiement et contactez {LEGAL.supportEmail} pour demander l’examen du dossier. Vous pouvez également consulter vos paiements automatiques dans votre compte PayPal.</p>
+            <p className="mt-2">Pour toute transaction, conservez votre référence de paiement et contactez {LEGAL.supportEmail} pour demander l’examen du dossier. Pour les anciens abonnements PayPal, vous pouvez également consulter vos paiements automatiques dans votre compte PayPal.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">5. Effet d’un remboursement</h2>
             <p className="mt-2">Lorsqu’un remboursement est accordé, l’accès aux fonctionnalités payantes associées peut être retiré ou revenir à l’offre gratuite, conformément à l’état de l’abonnement.</p>
