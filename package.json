@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/pro-compliance.test.mjs"
+    "test": "node --experimental-strip-types --test tests/pro-compliance.test.mjs tests/document-math.test.mjs"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.2.0",
