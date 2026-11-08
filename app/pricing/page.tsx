@@ -46,14 +46,14 @@ export default function PricingPage() {
     if(!session) { router.push("/login"); return null; }
     const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body)});
     const result=await response.json();
-    if(!response.ok) throw new Error(result.error||"PayPal unavailable");    return result;
+    if(!response.ok) throw new Error(result.error||"Service PayPal indisponible");    return result;
   }, [router]);
 
 
   async function start(plan:"pro"|"business") {
     setLoading(plan);setNotice("");
     try { const result=await callPayPal("/api/paypal/checkout",{plan}); if(result?.url) window.location.assign(result.url); }
-    catch(e) {setNotice(e instanceof Error?e.message:"Payment unavailable");setLoading(null);}
+    catch(e) {setNotice(e instanceof Error?e.message:"Paiement indisponible");setLoading(null);}
   }
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
