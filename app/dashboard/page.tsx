@@ -404,7 +404,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("role, plan, usage_count")
+      .select("role, plan, usage_count, stripe_subscription_id, stripe_subscription_status")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -416,7 +416,7 @@ export default function Home() {
     setUserRole(data.role || "user");
     setPlan((data.plan || "free") as Plan);
     setUsageCount(Number(data.usage_count) || 0);
-    if (data.role !== "owner") {
+    if (data.role !== "owner" && !(data.stripe_subscription_id && data.stripe_subscription_status === "active")) {
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session?.access_token) {
         try {
@@ -1149,7 +1149,7 @@ export default function Home() {
 
           <section className="rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <h2 className="text-center text-2xl font-bold">{t.plans}</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Souscrire avec PayPal →</a>}</div>)}</div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Payer par carte bancaire →</a>}</div>)}</div>
           </section>
 
           <footer className="pb-4 pt-2 text-center text-sm text-stone-500">
