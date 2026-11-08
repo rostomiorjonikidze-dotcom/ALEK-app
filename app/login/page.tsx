@@ -101,7 +101,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password` });
       if (error) { setMessage(error.message); return; }
       setMessage(recoveryLabels[2]);
-    } catch { setMessage("Unable to request password reset. Please try again."); }
+    } catch { setMessage("Impossible de demander la réinitialisation du mot de passe. Réessayez."); }
     finally { setLoading(false); }
   }
 
