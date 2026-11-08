@@ -9,6 +9,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
+import { NotoSansBase64 } from "../lib/notosans-font";
+import { NotoSansGeorgianBase64 } from "../lib/notosansgeorgian-font";
+import { serviceTotal, inferUnitPrices } from "../lib/document-math";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -46,6 +49,8 @@ type SavedDocument = {
   description: string | null;
   services: ServiceItem[] | null;
   vat_rate: number | string | null;
+  vat_exempt?: boolean | null;
+  client_is_professional?: boolean | null;
   total_ht: number | string | null;
   total_vat: number | string | null;
   total_ttc: number | string | null;
@@ -477,11 +482,6 @@ function normalizeService(raw: any): ServiceItem {
   };
 }
 
-function serviceTotal(item: ServiceItem) {
-  if (item.priceType === "hourly") return Number(item.hours || 0) * Number(item.price || 0);
-  if (item.priceType === "unit") return Number(item.quantity || 0) * Number(item.price || 0);
-  return Number(item.price || 0);
-}
 
 export default function Home() {
   const router = useRouter();
@@ -587,10 +587,10 @@ export default function Home() {
         setBusinessEmail(draft.businessEmail || "");
         setBusinessSiret(draft.businessSiret || "");
         setDocumentType(draft.documentType === "facture" ? "facture" : "devis");
-        setDevisNumber(draft.devisNumber || "");
+        setDevisNumber("");
         setDevisDate(draft.devisDate || "");
         setValidUntil(draft.validUntil || "");
-        setInvoiceNumber(draft.invoiceNumber || "");
+        setInvoiceNumber("");
         setDevisReference(draft.devisReference || "");
         setInvoiceDate(draft.invoiceDate || "");
         setInvoiceDueDate(draft.invoiceDueDate || "");
@@ -599,8 +599,7 @@ export default function Home() {
         setInvoiceStatus(draft.invoiceStatus || "unpaid");
         setVatRate(Number(draft.vatRate) || 0);
       } else {
-        const number = nextDocumentNumber("devis");
-        setDevisNumber(number);
+        setDevisNumber("");
         setDevisDate(todayInput());
         setValidUntil(datePlusDays(30));
       }
@@ -679,13 +678,6 @@ export default function Home() {
     void loadDocuments();
   }, [router]);
 
-  function nextDocumentNumber(type: DocumentType) {
-    const key = type === "devis" ? "alek-devis-counter" : "alek-invoice-counter";
-    const prefix = type === "devis" ? "DEV" : "FAC";
-    const next = (Number(localStorage.getItem(key)) || 0) + 1;
-    localStorage.setItem(key, String(next));
-    return `${prefix}-${new Date().getFullYear()}-${String(next).padStart(3, "0")}`;
-  }
 
   async function loadProfile(router: ReturnType<typeof useRouter>) {
     const { data: authData } = await supabase.auth.getUser();
@@ -784,7 +776,7 @@ export default function Home() {
     setShowHistory(false);
     setEditorStep(0);
     setDocumentType("devis");
-    setDevisNumber(nextDocumentNumber("devis"));
+    setDevisNumber("");
     setDevisDate(todayInput());
     setValidUntil(datePlusDays(30));
     setDescription("");
@@ -802,7 +794,7 @@ export default function Home() {
     setShowHistory(false);
     setEditorStep(0);
     setDocumentType("facture");
-    setInvoiceNumber(nextDocumentNumber("facture"));
+    setInvoiceNumber("");
     setInvoiceDate(todayInput());
     setInvoiceDueDate(datePlusDays(30));
     setDevisReference("");
@@ -824,7 +816,7 @@ export default function Home() {
     setSelectedDocumentId(null);
     setEditorStep(0);
     setDocumentType("facture");
-    setInvoiceNumber(nextDocumentNumber("facture"));
+    setInvoiceNumber("");
     setDevisReference(sourceDevis);
     setInvoiceDate(todayInput());
     setInvoiceDueDate(datePlusDays(30));
@@ -877,7 +869,7 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error || "AI request failed");
 
       setFrenchText(data.frenchText || "");
-      setServices(Array.isArray(data.services) ? data.services.map(normalizeService) : []);
+      setServices(Array.isArray(data.services) ? inferUnitPrices(description, data.services.map(normalizeService)) : []);
 
       if (typeof data.usageCount === "number") {
         setUsageCount(data.usageCount);
@@ -938,6 +930,8 @@ export default function Home() {
       description: frenchText || null,
       services,
       vat_rate: vatRate,
+      vat_exempt: vatExemptionConfirmed,
+      client_is_professional: clientIsProfessional,
       total_ht: totalHT,
       total_vat: vatAmount,
       total_ttc: totalTTC,
@@ -949,34 +943,39 @@ export default function Home() {
   }
 
   async function saveDocumentToDatabase() {
-    if (savingDocument || !validateDocument()) return;
+    // Document numbers are allocated by Supabase during the actual insert.
+    // A client-local counter can produce duplicate legal invoice numbers.
+    if (savingDocument || !validateDocument(Boolean(selectedDocumentId))) return;
     setSavingDocument(true);
     try {
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    const user = authData.user;
-    if (authError || !user) {
-      alert(t.loginRequired);
-      return;
-    }
-
-    const payload = buildPayload(user.id);
-    const query = selectedDocumentId
-      ? supabase.from("documents").update(payload).eq("id", selectedDocumentId).eq("user_id", user.id).select("*").single()
-      : supabase.from("documents").insert(payload).select("*").single();
-
-    const { data, error } = await query;
-    if (error) {
-      console.error(`Save document error: ${error.message} | ${error.code || ""}`);
-      alert(t.saveError);
-      return;
-    }
-
-    if (data?.id) setSelectedDocumentId(data.id);
-    await loadDocuments();
-    alert(t.saveSuccess);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      const user = authData.user;
+      if (authError || !user) {
+        alert(t.loginRequired);
+        return;
+      }
+      const payload = buildPayload(user.id);
+      if (selectedDocumentId) {
+        // An already issued number may never be changed by editing the form.
+        const { document_number: previousNumber, ...editablePayload } = payload;
+        void previousNumber;
+        const { error } = await supabase.from("documents").update(editablePayload)
+          .eq("id", selectedDocumentId).eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.rpc("issue_artisan_document_v2", { p_payload: payload });
+        if (error) throw error;
+        const issued = data as { id?: string; document_number?: string } | null;
+        if (!issued?.id || !issued.document_number) throw new Error("Numérotation indisponible");
+        setSelectedDocumentId(issued.id);
+        if (documentType === "facture") setInvoiceNumber(issued.document_number);
+        else setDevisNumber(issued.document_number);
+      }
+      await loadDocuments();
+      alert(t.saveSuccess);
     } catch (error) {
       console.error("Document save failed:", error);
-      alert(t.saveError);
+      alert("Enregistrement impossible. Aucun numéro de document n'a été attribué. Réessayez.");
     } finally {
       setSavingDocument(false);
     }
@@ -1000,6 +999,8 @@ export default function Home() {
     setDescription(doc.description || "");
     setServices(Array.isArray(doc.services) ? doc.services.map(normalizeService) : []);
     setVatRate(Number(doc.vat_rate) || 0);
+    setVatExemptionConfirmed(Boolean(doc.vat_exempt));
+    setClientIsProfessional(Boolean(doc.client_is_professional));
 
     if (doc.document_type === "facture") {
       setInvoiceNumber(doc.document_number || "");
@@ -1031,7 +1032,7 @@ export default function Home() {
     await loadDocuments();
   }
 
-  function validateDocument(): boolean {
+  function validateDocument(requireNumber = true): boolean {
     if (!clientName.trim()) {
       alert("Renseignez le nom du client avant de continuer.");
       scrollToSection("client-section");
@@ -1042,13 +1043,25 @@ export default function Home() {
       scrollToSection("settings-section");
       return false;
     }
+    if (/\[?NON[- ]DIFFUSIBLE\]?/i.test([businessName,businessAddress,clientName,clientAddress].join(" "))) {
+      alert("Les coordonnées indiquent « NON-DIFFUSIBLE ». Renseignez manuellement les identités et adresses réelles avant d’émettre un document.");
+      return false;
+    }
+    if (![9, 14].includes(businessSiret.replace(/\D/g, "").length)) {
+      alert("Le SIREN doit contenir 9 chiffres ou le SIRET 14 chiffres.");
+      return false;
+    }
+    if (vatExemptionConfirmed && vatRate !== 0) {
+      alert("La franchise en base de TVA nécessite un taux à 0 %.");
+      return false;
+    }
     if (!services.length || services.some(item => !item.description.trim() || !Number.isFinite(item.price) || item.price < 0)) {
       alert("Ajoutez au moins une prestation avec une description et un prix valide.");
       scrollToSection("services-section");
       return false;
     }
-    if (!(documentType === "facture" ? invoiceNumber : devisNumber).trim()) {
-      alert("Renseignez le numéro du document.");
+    if (requireNumber && !(documentType === "facture" ? invoiceNumber : devisNumber).trim()) {
+      alert("Enregistrez le document pour obtenir un numéro unique avant de générer le PDF.");
       scrollToSection("settings-section");
       return false;
     }
@@ -1060,6 +1073,52 @@ export default function Home() {
     if(vatExemptionConfirmed && vatRate!==0){alert("La franchise en base de TVA nécessite un taux de TVA à 0 %.");return;}
     if(vatRate===0 && !vatExemptionConfirmed && !window.confirm("TVA à 0 % : confirmez que votre régime de TVA ou l’exonération applicable est correctement documenté. Continuer sans mention article 293 B ?"))return;
     const doc = new jsPDF();
+    doc.addFileToVFS("NotoSans-Regular.ttf", NotoSansBase64);
+    doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", NotoSansGeorgianBase64);
+    doc.addFont("NotoSansGeorgian-Regular.ttf", "NotoGeorgian", "normal");
+    const hasGeorgian = (value: string) => /[\u10a0-\u10ff\u1c90-\u1cbf]/u.test(value);
+    const mixedRuns = (value: string) => {
+      const runs: { text: string; font: "NotoSans" | "NotoGeorgian" }[] = [];
+      for (const character of Array.from(value)) {
+        const font = hasGeorgian(character) ? "NotoGeorgian" : "NotoSans";
+        const last = runs[runs.length - 1];
+        if (last?.font === font) last.text += character;
+        else runs.push({ text: character, font });
+      }
+      return runs;
+    };
+    const mixedWidth = (value: string) => mixedRuns(value).reduce((sum, run) => {
+      doc.setFont(run.font, "normal");
+      return sum + doc.getTextWidth(run.text);
+    }, 0);
+    const drawMixed = (value: string, x: number, y: number, rightAligned = false) => {
+      let at = rightAligned ? x - mixedWidth(value) : x;
+      for (const run of mixedRuns(value)) {
+        doc.setFont(run.font, "normal");
+        doc.text(run.text, at, y);
+        at += doc.getTextWidth(run.text);
+      }
+    };
+    const wrapMixed = (value: string, width: number): string[] => {
+      const lines: string[] = [];
+      let current = "";
+      for (const word of value.trim().split(/\s+/u)) {
+        const proposed = current ? current + " " + word : word;
+        if (mixedWidth(proposed) <= width) { current = proposed; continue; }
+        if (current) { lines.push(current); current = ""; }
+        current = word;
+        while (current && mixedWidth(current) > width) {
+          let cut = 1;
+          while (cut < Array.from(current).length && mixedWidth(Array.from(current).slice(0, cut + 1).join("")) <= width) cut++;
+          const points = Array.from(current);
+          lines.push(points.slice(0, cut).join(""));
+          current = points.slice(cut).join("");
+        }
+      }
+      if (current) lines.push(current);
+      return lines.length ? lines : ["—"];
+    };
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const left = 18;
@@ -1071,9 +1130,8 @@ export default function Home() {
     const textBlock = (label: string, value: string, x: number, y: number, width: number) => {
       doc.setFont("helvetica", "bold");
       doc.text(label, x, y);
-      doc.setFont("helvetica", "normal");
-      const lines = doc.splitTextToSize(safe(value), width) as string[];
-      doc.text(lines, x, y + 6);
+      const lines = wrapMixed(safe(value), width);
+      lines.forEach((line, index) => drawMixed(line, x, y + 6 + index * 5));
       return y + 6 + lines.length * 5;
     };
     doc.setFillColor(15, 35, 71);
@@ -1083,7 +1141,7 @@ export default function Home() {
     doc.setFontSize(21);
     doc.text(documentType === "facture" ? "FACTURE" : "DEVIS", left, 22);
     doc.setFontSize(10);
-    doc.text(safe(number), right, 22, { align: "right" });
+    drawMixed(safe(number), right, 22, true);
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -1098,29 +1156,28 @@ export default function Home() {
     let companyY = textBlock("ÉMETTEUR", businessName, left + 4, 73, 75);
     for (const line of [businessAddress, businessPhone, businessEmail, `SIRET : ${safe(businessSiret)}`]) {
       if (companyY > 115) break;
-      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
-      doc.text(wrapped, left + 4, companyY);
+      const wrapped = wrapMixed(safe(line), 75);
+      wrapped.forEach((part, index) => drawMixed(part, left + 4, companyY + index * 4.5));
       companyY += wrapped.length * 4.5;
     }
     let clientY = textBlock("CLIENT", clientName, 112, 73, 75);
     for (const line of [clientAddress, clientPhone, clientEmail]) {
       if (clientY > 115) break;
-      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
-      doc.text(wrapped, 112, clientY);
+      const wrapped = wrapMixed(safe(line), 75);
+      wrapped.forEach((part, index) => drawMixed(part, 112, clientY + index * 4.5));
       clientY += wrapped.length * 4.5;
     }
 
-    const descriptionLines = doc.splitTextToSize(safe(frenchText), 174) as string[];
+    const descriptionLines = wrapMixed(safe(frenchText), 174);
     let descriptionY = 133;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("Description des travaux", left, descriptionY);
     descriptionY += 7;
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     for (const line of descriptionLines) {
       if (descriptionY > pageHeight - 32) { doc.addPage(); descriptionY = 24; }
-      doc.text(line, left, descriptionY);
+      drawMixed(line, left, descriptionY);
       descriptionY += 4.5;
     }
     if (descriptionY > pageHeight - 40) { doc.addPage(); descriptionY = 24; }
@@ -1128,14 +1185,28 @@ export default function Home() {
     autoTable(doc, {
       startY: descriptionY + 6,
       margin: { left, right: 18, top: 20, bottom: 22 },
-      head: [["Description", "Qté / Heures", "Prix unitaire", "Total HT"]],
+      head: [["Description", "Qté / Heures", "Prix", "Total HT"]],
       body: services.map(item => [
         safe(item.description),
         item.priceType === "hourly" ? `${item.hours} h` : String(item.quantity),
-        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : ""}`,
+        `${Number(item.price).toFixed(2)} EUR${item.priceType === "hourly" ? "/h" : item.priceType === "unit" ? "/u" : " (total)"}`,
         `${serviceTotal(item).toFixed(2)} EUR`,
       ]),
-      styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+      styles: { font: "NotoSans", fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+      didParseCell: (cell) => {
+        const value = String(cell.cell.raw ?? "");
+        if (cell.section === "body" && cell.column.index === 0 && hasGeorgian(value)) {
+          cell.cell.text = wrapMixed(value, 72).map(() => " ");
+        }
+      },
+      didDrawCell: (cell) => {
+        const value = String(cell.cell.raw ?? "");
+        if (cell.section === "body" && cell.column.index === 0 && hasGeorgian(value)) {
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(9);
+          wrapMixed(value, 72).forEach((line, index) => drawMixed(line, cell.cell.x + 3, cell.cell.y + 6 + index * 4.5));
+        }
+      },
       headStyles: { fillColor: [27, 72, 144] },
       alternateRowStyles: { fillColor: [246, 249, 253] },
       columnStyles: { 0: { cellWidth: 78 }, 1: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 34 } },
@@ -1148,24 +1219,24 @@ export default function Home() {
     doc.text(`TVA (${vatRate} %) : ${vatAmount.toFixed(2)} EUR`, right, y + 8, { align: "right" });
     doc.setFillColor(231, 240, 255);
     doc.roundedRect(92, y + 13, 100, 16, 2, 2, "F");
-    doc.setFont("helvetica", "bold");
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(13);
     doc.text(`Total TTC : ${totalTTC.toFixed(2)} EUR`, right - 4, y + 24, { align: "right" });
-    y += 40;
-    doc.setFont("helvetica", "normal");
+    y += 34;
+    doc.setFont("NotoSans", "normal");
     doc.setFontSize(9);
     const details = documentType === "facture"
       ? [paymentTerms && `Conditions de paiement : ${paymentTerms}`, paymentMethod && `Mode de paiement : ${paymentMethod}`, `Statut : ${invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée"}`].filter(Boolean) as string[]
       : [];
     if(documentType==="facture"){
       details.push(...paymentClauses(clientIsProfessional?"professionnel":"particulier",30,vatExemptionConfirmed));
-      if(clientIsProfessional)details.push("Référence : article D. 441-5 du Code de commerce (indemnité forfaitaire de recouvrement).");
+      // The 40 EUR clause above already includes its legal reference.
     }
     for (const detail of details) {
-      const lines = doc.splitTextToSize(detail, 170) as string[];
+      const lines = wrapMixed(detail, 170);
       if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
-      doc.text(lines, left, y);
-      y += lines.length * 5 + 3;
+      lines.forEach((line, index) => drawMixed(line, left, y + index * 5));
+      y += lines.length * 5 + 2;
     }
     const pageCount = doc.getNumberOfPages();
     for (let page = 1; page <= pageCount; page++) {
@@ -1208,7 +1279,7 @@ export default function Home() {
   return (
     <main dir="ltr" className="alek-premium-dashboard min-h-screen overflow-x-hidden bg-[#f3f6fc] text-slate-900">
       <nav aria-label="Outils artisans" className="fixed bottom-3 right-3 z-40 flex gap-2 rounded-xl bg-white/95 p-2 shadow-lg"><a href="/atelier" className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white">Clients & tarifs</a><a href="/modeles-metiers" className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-bold text-blue-800">Modèles métiers</a><a href="/photo-devis" className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-bold text-blue-800">Photo → Devis</a><a href="/suivi-financier" className="rounded-lg border border-blue-300 px-3 py-2 text-xs font-bold text-blue-800">Finances</a></nav>
-      <div className="mx-auto max-w-[1580px] px-3 pb-28 pt-4 sm:px-6 sm:py-6 lg:pl-[280px]"><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm"><button type="button" aria-label="Ouvrir le menu" onClick={()=>setMobileMenuOpen(true)} className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-lg text-blue-800 lg:hidden">☰</button><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ALEK ARTISAN</p><p className="text-sm text-slate-600">Votre espace professionnel</p></div><div className="flex flex-wrap items-center gap-2"><Link href="/a-propos" className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50">À propos</Link><Link href="/outils-pro" className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">Outils Pro ✦</Link><InstallApp /></div></div><div className="alek-dashboard-hero relative mb-6 flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[30px] bg-[#0a1e40] p-7 text-white shadow-[0_24px_70px_rgba(12,36,79,.22)] sm:p-9"><div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full bg-blue-500/30 blur-3xl"/><div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-64 rounded-full bg-cyan-400/15 blur-3xl"/><div className="relative z-10"><span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[.2em] text-blue-200">✦ Espace professionnel ALEK</span><h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Tableau de bord<span className="text-[#72baff]">.</span></h1><p className="mt-2 max-w-md text-sm leading-6 text-blue-100/75">Pilotez vos devis, factures et clients depuis un seul espace.</p></div><div className="relative z-10 flex flex-wrap gap-2"><button type="button" onClick={()=>{setDocumentType("devis");scrollToSection("document-section")}} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 hover:bg-blue-700">＋ Nouveau devis</button><button type="button" onClick={()=>{setDocumentType("facture");scrollToSection("document-section")}} className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50">Nouvelle facture</button></div></div>
+      <div className="mx-auto max-w-[1580px] px-3 pb-28 pt-4 sm:px-6 sm:py-6 lg:pl-[280px]"><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm"><button type="button" aria-label="Ouvrir le menu" onClick={()=>setMobileMenuOpen(true)} className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-lg text-blue-800 lg:hidden">☰</button><div><p className="text-xs font-bold uppercase tracking-widest text-blue-600">ALEK ARTISAN</p><p className="text-sm text-slate-600">Votre espace professionnel</p></div><div className="flex flex-wrap items-center gap-2"><Link href="/a-propos" className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-blue-50">À propos</Link><Link href="/outils-pro" className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100">Outils Pro ✦</Link><InstallApp /></div></div><div className="alek-dashboard-hero relative mb-6 flex flex-wrap items-center justify-between gap-6 overflow-hidden rounded-[30px] bg-[#0a1e40] p-7 text-white shadow-[0_24px_70px_rgba(12,36,79,.22)] sm:p-9"><div className="pointer-events-none absolute -right-16 -top-32 h-80 w-80 rounded-full bg-blue-500/30 blur-3xl"/><div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-64 rounded-full bg-cyan-400/15 blur-3xl"/><div className="relative z-10"><span className="inline-flex rounded-full border border-blue-300/30 bg-blue-400/15 px-3 py-1 text-[10px] font-bold uppercase tracking-[.2em] text-blue-200">✦ Espace professionnel ALEK</span><h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Tableau de bord<span className="text-[#72baff]">.</span></h1><p className="mt-2 max-w-md text-sm leading-6 text-blue-100/75">Pilotez vos devis, factures et clients depuis un seul espace.</p></div><div className="relative z-10 flex flex-wrap gap-2"><button type="button" onClick={()=>{if(documentType!=="devis")createNewDevis();scrollToSection("document-section")}} className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 hover:bg-blue-700">＋ Nouveau devis</button><button type="button" onClick={()=>{if(documentType!=="facture")createNewInvoice();scrollToSection("document-section")}} className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 hover:bg-blue-50">Nouvelle facture</button></div></div>
         <div className="alek-kpi-grid mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">{[
           {label:"Chiffre d’affaires encaissé",value:money(invoiceRevenue)},
           {label:"Devis enregistrés",value:String(quoteDocs.length)},
@@ -1326,14 +1397,14 @@ export default function Home() {
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Création de document</p><h2 className="mt-1 text-2xl font-black tracking-tight text-[#0f2347]">Création de {documentType === "devis" ? "devis" : "facture"}</h2></div><span className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">Document professionnel</span></div><div className="alek-editor-steps sticky top-2 z-20 mb-5 grid grid-cols-4 gap-2 rounded-[24px] border border-[#dce6f6] bg-white/95 p-2 text-center text-[10px] font-semibold text-slate-500 shadow-[0_18px_50px_rgba(16,42,85,.13)] backdrop-blur-xl sm:gap-3 sm:p-3 sm:text-sm">{[{label:"1. Client",target:"client-section"},{label:"2. Prestations",target:"services-section"},{label:"3. Entreprise",target:"settings-section"},{label:"4. Aperçu",target:"alek-live-preview"}].map((step)=><button type="button" key={step.target} onClick={()=>scrollToSection(step.target)} aria-current={editorStep === editorSections.findIndex((section) => section === step.target) ? "step" : undefined} className={`min-w-0 rounded-xl px-1 py-3 leading-tight transition hover:bg-blue-50 focus-visible:bg-blue-50 ${editorStep === editorSections.findIndex((section) => section === step.target) ? "bg-blue-600 font-bold text-white hover:bg-blue-700" : "text-blue-700"}`}>{step.label}</button>)}</div><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[#dbe7fa] bg-gradient-to-r from-[#eaf2ff] to-white px-5 py-4 shadow-sm"><p className="text-sm font-semibold text-slate-700">Étape {editorStep+1} sur 4 · {["Client","Prestations","Entreprise","Aperçu"][editorStep]}</p><div className="flex gap-2"><button type="button" disabled={editorStep===0} onClick={()=>scrollToSection(editorSections[Math.max(0,editorStep-1)])} className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">← Précédent</button><button type="button" disabled={editorStep===3} onClick={()=>scrollToSection(editorSections[Math.min(3,editorStep+1)])} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Suivant →</button></div></div><div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Progression du document</p><p className="mt-1 text-sm font-bold text-[#14213b]">{["Informations client","Prestations et produits","Tarification et entreprise","Aperçu et export"][editorStep]}</p></div><span className="text-sm font-black tabular-nums text-blue-700">{Math.round((editorStep+1)/4*100)}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300" style={{width:`${(editorStep+1)/4*100}%`}} /></div></div><div id="alek-live-preview" className={`mb-6 grid scroll-mt-6 gap-5 xl:grid-cols-[.85fr_1.15fr] ${editorStep === 3 ? "" : "hidden"}`}><section className="relative overflow-hidden rounded-[28px] border border-[#244b89] bg-gradient-to-br from-[#0b1e3e] via-[#163c78] to-[#2259aa] p-7 text-white shadow-[0_22px_65px_rgba(18,51,104,.20)]"><p className="text-xs font-black uppercase tracking-widest text-blue-200">✦ Assistant IA</p><h2 className="mt-3 text-2xl font-black">Votre document, plus simplement.</h2><p className="mt-3 leading-7 text-blue-100">Décrivez votre prestation dans le formulaire ci-dessous. L’assistant IA existant vous aide à rédiger votre document.</p><button type="button" onClick={()=>scrollToSection("alek-ai-assistant")} className="mt-6 rounded-xl bg-white px-5 py-3 font-bold text-[#153b78] shadow-lg hover:bg-blue-50">Créer mon document →</button></section><section className="rounded-[28px] border border-[#dce6f4] bg-white p-6 shadow-[0_22px_65px_rgba(20,45,83,.10)]"><div className="mb-4 flex items-center justify-between"><h2 className="font-black">Aperçu en direct</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{documentType === "devis"?"Devis":"Facture"}</span></div><div className="min-h-80 rounded-lg border border-slate-100 p-5 shadow-sm"><div className="flex justify-between gap-3 border-b pb-5"><div><p className="text-lg font-black text-blue-700">ALEK Artisan</p><p className="mt-2 text-xs text-slate-500">{businessName||"Votre entreprise"}</p></div><div className="text-right"><p className="font-black uppercase">{documentType}</p><p className="text-xs text-slate-500">{documentType==="devis"?(devisNumber||"Numéro à compléter"):(invoiceNumber||"Numéro à compléter")}</p></div></div><p className="mt-5 text-xs text-slate-400">Client</p><p className="font-bold">{clientName||"Nom du client"}</p><div className="mt-6 border-t">{services.length?services.slice(0,4).map((item,i)=><div key={i} className="flex justify-between gap-3 border-b py-3 text-xs"><span className="break-words">{item.description||"Prestation"}</span><strong>{money(serviceTotal(item))}</strong></div>):<p className="py-5 text-sm text-slate-400">Les prestations apparaîtront ici.</p>}</div><div className="mt-5 flex justify-between font-black"><span>Total HT</span><span>{money(totalHT)}</span></div><div className="mt-2 flex justify-between text-sm text-slate-600"><span>TVA ({vatRate} %)</span><span>{money(vatAmount)}</span></div><div className="mt-3 flex justify-between border-t border-blue-100 pt-3 text-lg font-black text-blue-700"><span>Total TTC</span><span>{money(totalTTC)}</span></div><p className="mt-5 text-[11px] text-slate-400">Aperçu indicatif, distinct du PDF final.</p></div></section></div><div className={`mb-6 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm ${editorStep === 3 ? "" : "hidden"}`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-[#14213b]">Votre document est prêt à être vérifié</p><p className="mt-1 text-xs text-slate-500">Enregistrez votre document ou téléchargez le PDF après vérification.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="flex-1 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 sm:flex-none">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="flex-1 rounded-xl bg-[#14213b] px-5 py-3 text-sm font-bold text-white hover:bg-[#243957] sm:flex-none">{t.createPdf}</button></div></div></div><section id="document-section" className="scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => setDocumentType("devis")} className={`rounded-xl px-4 py-3 font-bold ${documentType === "devis" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>📄 {t.devis.toUpperCase()}</button>
-              <button type="button" onClick={() => setDocumentType("facture")} className={`rounded-xl px-4 py-3 font-bold ${documentType === "facture" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>🧾 {t.facture.toUpperCase()}</button>
+              <button type="button" onClick={() => { if (documentType !== "devis") createNewDevis(); }} className={`rounded-xl px-4 py-3 font-bold ${documentType === "devis" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>📄 {t.devis.toUpperCase()}</button>
+              <button type="button" onClick={() => { if (documentType !== "facture") createNewInvoice(); }} className={`rounded-xl px-4 py-3 font-bold ${documentType === "facture" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>🧾 {t.facture.toUpperCase()}</button>
             </div>
             {documentType === "devis" && <div className="mt-3 grid gap-3 sm:grid-cols-2"><button type="button" onClick={transformToInvoice} className="rounded-xl bg-green-600 px-4 py-3 font-bold text-white">→ {t.transform}</button><button type="button" onClick={createNewDevis} className="rounded-xl border border-blue-600 px-4 py-3 font-semibold text-blue-700">+ {t.newDevis}</button></div>}
             {documentType === "facture" && <button type="button" onClick={createNewInvoice} className="mt-3 w-full rounded-xl border border-blue-600 px-4 py-3 font-semibold text-blue-700">+ {t.newInvoice}</button>}
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {documentType === "devis" ? <><input value={devisNumber} onChange={(e) => setDevisNumber(e.target.value)} placeholder={t.devisNumber} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><label className="text-sm font-medium">{t.devisDate}<input type="date" value={devisDate} onChange={(e) => setDevisDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><label className="text-sm font-medium">{t.validUntil}<input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label></> : <><input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder={t.invoiceNumber} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><input value={devisReference} onChange={(e) => setDevisReference(e.target.value)} placeholder={t.devisReference} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><label className="text-sm font-medium">{t.invoiceDate}<input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><label className="text-sm font-medium">{t.dueDate}<input type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder={t.paymentTerms} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3"><option value="">{t.paymentMethod}</option><option value="Virement bancaire">Virement bancaire</option><option value="Carte bancaire">Carte bancaire</option><option value="Espèces">Espèces</option><option value="Chèque">Chèque</option></select><select value={invoiceStatus} onChange={(e) => setInvoiceStatus(e.target.value)} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3"><option value="unpaid">{t.unpaid}</option><option value="pending">{t.pending}</option><option value="paid">{t.paid}</option></select></>}
+              {documentType === "devis" ? <><input value={devisNumber} readOnly placeholder="Numéro attribué à l’enregistrement" className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><label className="text-sm font-medium">{t.devisDate}<input type="date" value={devisDate} onChange={(e) => setDevisDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><label className="text-sm font-medium">{t.validUntil}<input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label></> : <><input value={invoiceNumber} readOnly placeholder="Numéro attribué à l’enregistrement" className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><input value={devisReference} onChange={(e) => setDevisReference(e.target.value)} placeholder={t.devisReference} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><label className="text-sm font-medium">{t.invoiceDate}<input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><label className="text-sm font-medium">{t.dueDate}<input type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /></label><input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder={t.paymentTerms} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3" /><select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3"><option value="">{t.paymentMethod}</option><option value="Virement bancaire">Virement bancaire</option><option value="Carte bancaire">Carte bancaire</option><option value="Espèces">Espèces</option><option value="Chèque">Chèque</option></select><select value={invoiceStatus} onChange={(e) => setInvoiceStatus(e.target.value)} className="rounded-xl border border-slate-200 bg-[#f8fbff] px-4 py-3"><option value="unpaid">{t.unpaid}</option><option value="pending">{t.pending}</option><option value="paid">{t.paid}</option></select></>}
             </div>
           </section>
 
@@ -1356,7 +1427,7 @@ export default function Home() {
 
           <section id="settings-section" className={`scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)] ${editorStep === 2 ? "" : "hidden"}`}>
             <div className="mb-5 flex items-center gap-3"><div className="rounded-xl bg-blue-50 p-3 text-xl">💶</div><div><p className="text-sm font-semibold text-blue-700">Tarification</p><h2 className="text-2xl font-extrabold">{t.pricing}</h2></div></div>
-            <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>setVatExemptionConfirmed(e.target.checked)}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
+            <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>{setVatExemptionConfirmed(e.target.checked);if(e.target.checked)setVatRate(0);}}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} disabled={vatExemptionConfirmed} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
             <div className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.materials}</p><p className="mt-1 text-2xl font-bold">{materialFromServices.toFixed(2)} €</p></div><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.laborTotal}</p><p className="mt-1 text-2xl font-bold">{laborFromServices.toFixed(2)} €</p></div></div>
             <div className="mt-4 rounded-2xl bg-[#f8efe5] p-5"><div className="flex justify-between"><span>HT</span><b>{totalHT.toFixed(2)} €</b></div><div className="mt-2 flex justify-between"><span>TVA ({vatRate}%)</span><b>{vatAmount.toFixed(2)} €</b></div><div className="mt-3 flex items-center justify-between border-t pt-3"><span className="text-lg font-bold">TTC</span><span className="text-3xl font-black">{totalTTC.toFixed(2)} €</span></div></div>
             <p className="mt-4 text-xs leading-5 text-slate-500">Vérifiez les coordonnées du client, les prestations et la TVA avant l’enregistrement ou l’export PDF.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="rounded-xl bg-emerald-600 px-5 py-4 font-bold text-white hover:bg-emerald-700">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="rounded-xl bg-stone-800 px-5 py-4 font-bold text-white hover:bg-stone-700">{t.createPdf}</button></div>
@@ -1364,7 +1435,7 @@ export default function Home() {
 
           <section className="rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <h2 className="text-center text-2xl font-bold">{t.plans}</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "9,99 €" : "19,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Souscrire avec PayPal →</a>}</div>)}</div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Souscrire avec PayPal →</a>}</div>)}</div>
           </section>
 
           <footer className="pb-4 pt-2 text-center text-sm text-stone-500">

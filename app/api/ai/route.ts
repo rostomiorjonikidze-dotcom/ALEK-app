@@ -171,6 +171,14 @@ EXEMPLES :
 "10 ordinateurs à 500 euros l'unité"
 => quantity=10, price=500, priceType="unit"
 
+"2 contrats à 1000 euros"
+=> quantity=2, price=1000, priceType="unit" (total 2000 euros)
+
+"2 contrats pour 1000 euros au total"
+=> quantity=2, price=1000, priceType="total" (total 1000 euros)
+
+IMPORTANT : « à X euros » après une quantité désigne un prix par unité, sauf mention explicite d’un prix global.
+
 "Conseil 5 heures à 80 euros par heure"
 => hours=5, price=80, priceType="hourly"
 
