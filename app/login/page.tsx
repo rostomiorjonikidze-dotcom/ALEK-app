@@ -5,44 +5,9 @@ import { useRouter } from "next/navigation";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { supabase } from "../lib/supabase";
 
-type Lang = "ka" | "fr" | "ru" | "de" | "ar";
 type Mode = "login" | "signup";
 
 const texts = {
-  ka: {
-    login: "შესვლა",
-    signup: "რეგისტრაცია",
-    subtitleLogin: "შედი შენს ALEK ანგარიშში",
-    subtitleSignup: "შექმენი პროფესიონალური ALEK ანგარიში",
-
-    firstName: "სახელი",
-    lastName: "გვარი",
-    company: "კომპანიის სახელი",
-    siret: "SIRET / SIREN",
-    email: "ელფოსტა",
-    password: "პაროლი",
-    confirmPassword: "გაიმეორე პაროლი",
-
-    loginButton: "შესვლა",
-    signupButton: "ანგარიშის შექმნა",
-    loading: "გთხოვ მოიცადო...",
-
-    noAccount: "ანგარიში არ გაქვს? რეგისტრაცია",
-    hasAccount: "უკვე გაქვს ანგარიში? შესვლა",
-
-    required: "გთხოვ შეავსე ყველა აუცილებელი ველი.",
-    invalidSiret: "SIRET უნდა შეიცავდეს 14 ციფრს ან SIREN 9 ციფრს.",
-    shortPassword: "პაროლი უნდა იყოს მინიმუმ 10 სიმბოლო.",
-    weakPassword:
-      "პაროლი უნდა შეიცავდეს დიდ ასოს, პატარა ასოს, ციფრს და სპეციალურ სიმბოლოს.",
-    passwordsMismatch: "პაროლები ერთმანეთს არ ემთხვევა.",
-    captchaRequired: "გთხოვ გაიარე CAPTCHA შემოწმება.",
-    signupSuccess:
-      "რეგისტრაცია წარმატებულია. შეამოწმე ელფოსტა ანგარიშის დასადასტურებლად.",
-    accountReady: "ანგარიში მზადაა. შეგიძლია შეხვიდე.",
-    privacy:
-      "რეგისტრაციით ადასტურებ, რომ მოწოდებული პროფესიული ინფორმაცია სწორია.",
-  },
 
   fr: {
     login: "Connexion",
@@ -78,119 +43,12 @@ const texts = {
     privacy:
       "En vous inscrivant, vous confirmez que les informations professionnelles fournies sont exactes.",
   },
-
-  ru: {
-    login: "Войти",
-    signup: "Регистрация",
-    subtitleLogin: "Войдите в свой аккаунт ALEK",
-    subtitleSignup: "Создайте профессиональный аккаунт ALEK",
-
-    firstName: "Имя",
-    lastName: "Фамилия",
-    company: "Название компании",
-    siret: "SIRET / SIREN",
-    email: "Электронная почта",
-    password: "Пароль",
-    confirmPassword: "Повторите пароль",
-
-    loginButton: "Войти",
-    signupButton: "Создать аккаунт",
-    loading: "Пожалуйста, подождите...",
-
-    noAccount: "Нет аккаунта? Регистрация",
-    hasAccount: "Уже есть аккаунт? Войти",
-
-    required: "Заполните все обязательные поля.",
-    invalidSiret: "SIRET должен содержать 14 цифр, SIREN — 9 цифр.",
-    shortPassword: "Пароль должен содержать минимум 10 символов.",
-    weakPassword:
-      "Пароль должен содержать заглавную и строчную буквы, цифру и специальный символ.",
-    passwordsMismatch: "Пароли не совпадают.",
-    captchaRequired: "Пройдите CAPTCHA-проверку.",
-    signupSuccess:
-      "Регистрация успешна. Проверьте электронную почту для подтверждения аккаунта.",
-    accountReady: "Аккаунт готов. Войдите.",
-    privacy:
-      "Регистрируясь, вы подтверждаете правильность предоставленной профессиональной информации.",
-  },
-
-  de: {
-    login: "Anmelden",
-    signup: "Registrieren",
-    subtitleLogin: "Melden Sie sich bei Ihrem ALEK-Konto an",
-    subtitleSignup: "Erstellen Sie Ihr professionelles ALEK-Konto",
-
-    firstName: "Vorname",
-    lastName: "Nachname",
-    company: "Firmenname",
-    siret: "SIRET / SIREN",
-    email: "E-Mail",
-    password: "Passwort",
-    confirmPassword: "Passwort bestätigen",
-
-    loginButton: "Anmelden",
-    signupButton: "Konto erstellen",
-    loading: "Bitte warten...",
-
-    noAccount: "Noch kein Konto? Registrieren",
-    hasAccount: "Bereits registriert? Anmelden",
-
-    required: "Bitte füllen Sie alle Pflichtfelder aus.",
-    invalidSiret: "SIRET muss 14 Ziffern oder SIREN 9 Ziffern enthalten.",
-    shortPassword: "Das Passwort muss mindestens 10 Zeichen lang sein.",
-    weakPassword:
-      "Das Passwort muss Groß- und Kleinbuchstaben, eine Zahl und ein Sonderzeichen enthalten.",
-    passwordsMismatch: "Die Passwörter stimmen nicht überein.",
-    captchaRequired: "Bitte führen Sie die CAPTCHA-Prüfung durch.",
-    signupSuccess:
-      "Registrierung erfolgreich. Bitte bestätigen Sie Ihr Konto per E-Mail.",
-    accountReady: "Ihr Konto ist bereit. Melden Sie sich an.",
-    privacy:
-      "Mit der Registrierung bestätigen Sie die Richtigkeit Ihrer Unternehmensangaben.",
-  },
-
-  ar: {
-    login: "تسجيل الدخول",
-    signup: "إنشاء حساب",
-    subtitleLogin: "سجّل الدخول إلى حسابك في ALEK",
-    subtitleSignup: "أنشئ حساب ALEK المهني الخاص بك",
-
-    firstName: "الاسم الأول",
-    lastName: "اسم العائلة",
-    company: "اسم الشركة",
-    siret: "SIRET / SIREN",
-    email: "البريد الإلكتروني",
-    password: "كلمة المرور",
-    confirmPassword: "تأكيد كلمة المرور",
-
-    loginButton: "تسجيل الدخول",
-    signupButton: "إنشاء الحساب",
-    loading: "يرجى الانتظار...",
-
-    noAccount: "ليس لديك حساب؟ إنشاء حساب",
-    hasAccount: "لديك حساب بالفعل؟ تسجيل الدخول",
-
-    required: "يرجى ملء جميع الحقول المطلوبة.",
-    invalidSiret: "يجب أن يحتوي SIRET على 14 رقمًا أو SIREN على 9 أرقام.",
-    shortPassword: "يجب أن تتكون كلمة المرور من 10 أحرف على الأقل.",
-    weakPassword:
-      "يجب أن تحتوي كلمة المرور على حرف كبير وحرف صغير ورقم ورمز خاص.",
-    passwordsMismatch: "كلمتا المرور غير متطابقتين.",
-    captchaRequired: "يرجى إكمال التحقق CAPTCHA.",
-    signupSuccess:
-      "تم التسجيل بنجاح. تحقق من بريدك الإلكتروني لتأكيد الحساب.",
-    accountReady: "حسابك جاهز. سجل الدخول.",
-    privacy:
-      "بإنشاء الحساب، فإنك تؤكد أن المعلومات المهنية المقدمة صحيحة.",
-  },
-
 };
 
 export default function LoginPage() {
   const router = useRouter();
   const captchaRef = useRef<HCaptcha>(null);
 
-  const [lang, setLang] = useState<Lang>("fr");
   const [mode, setMode] = useState<Mode>("login");
 
   const [firstName, setFirstName] = useState("");
@@ -209,14 +67,15 @@ export default function LoginPage() {
   const [showConfirmPassword] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
-  const t = texts[lang];
-  const recoveryLabels = {
-    ka: ["პაროლი დაგავიწყდა?", "პაროლის აღდგენა", "აღდგენის ბმული გამოგზავნილია, თუ ეს მისამართი რეგისტრირებულია. შეამოწმე სპამიც.", "შესვლაზე დაბრუნება", "ახალი პაროლის ბმულის გაგზავნა", "პაროლის ჩვენება"],
-    fr: ["Mot de passe oublié ?", "Réinitialiser le mot de passe", "Si cette adresse est enregistrée, un lien de réinitialisation sera envoyé. Vérifiez aussi les spams.", "Retour à la connexion", "Envoyer le lien de réinitialisation", "Afficher le mot de passe"],
-    ru: ["Забыли пароль?", "Сброс пароля", "Если адрес зарегистрирован, письмо со ссылкой будет отправлено. Проверьте спам.", "Вернуться ко входу", "Отправить ссылку", "Показать пароль"],
-    de: ["Passwort vergessen?", "Passwort zurücksetzen", "Falls die Adresse registriert ist, wird ein Link gesendet. Prüfen Sie auch Spam.", "Zurück zur Anmeldung", "Link senden", "Passwort anzeigen"],
-    ar: ["هل نسيت كلمة المرور؟", "إعادة تعيين كلمة المرور", "إذا كان البريد مسجلاً، فسيتم إرسال رابط. تحقق من الرسائل غير المرغوبة.", "العودة لتسجيل الدخول", "إرسال رابط إعادة التعيين", "إظهار كلمة المرور"],
-  }[lang];
+  const t = texts.fr;
+  const recoveryLabels = [
+    "Mot de passe oublié ?",
+    "Réinitialiser le mot de passe",
+    "Si cette adresse est enregistrée, un lien de réinitialisation sera envoyé. Vérifiez aussi les spams.",
+    "Retour à la connexion",
+    "Envoyer le lien de réinitialisation",
+    "Afficher le mot de passe",
+  ];
   const captchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
   const captchaEnabled = Boolean(captchaSiteKey);
 
@@ -357,7 +216,7 @@ export default function LoginPage() {
 
   return (
     <main
-      dir={lang === "ar" ? "rtl" : "ltr"}
+      dir="ltr"
       style={{
         minHeight: "100vh",
         background: "radial-gradient(circle at 15% 20%, rgba(60,129,246,.35) 0%, transparent 45%), radial-gradient(circle at 95% 80%, rgba(20,183,230,.18) 0%, transparent 40%), linear-gradient(140deg, #07172f, #14376c)",
@@ -415,22 +274,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <select
-            value={lang}
-            onChange={(e) => setLang(e.target.value as Lang)}
-            style={{
-              border: "1px solid #d6dce5",
-              borderRadius: "9px",
-              padding: "9px",
-              background: "#fff",
-            }}
-          >
-            <option value="fr">🇫🇷 FR</option>
-            <option value="ka">🇬🇪 KA</option>
-            <option value="ru">🇷🇺 RU</option>
-            <option value="de">🇩🇪 DE</option>
-            <option value="ar">🇸🇦 AR</option>
-          </select>
+          <span lang="fr" className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">Français</span>
         </div>
 
         <h1
@@ -545,20 +389,7 @@ export default function LoginPage() {
                   borderRadius: "9px",
                 }}
               >
-                {lang === "fr" &&
-                  "Minimum 10 caractères : majuscule, minuscule, chiffre et caractère spécial."}
-
-                {lang === "ka" &&
-                  "მინიმუმ 10 სიმბოლო: დიდი ასო, პატარა ასო, ციფრი და სპეციალური სიმბოლო."}
-
-                {lang === "ru" &&
-                  "Минимум 10 символов: заглавная и строчная буквы, цифра и специальный символ."}
-
-                {lang === "de" &&
-                  "Mindestens 10 Zeichen: Großbuchstabe, Kleinbuchstabe, Zahl und Sonderzeichen."}
-
-                {lang === "ar" &&
-                  "10 أحرف على الأقل: حرف كبير، حرف صغير، رقم ورمز خاص."}
+                Minimum 10 caractères : majuscule, minuscule, chiffre et caractère spécial.
               </div>
 
               {captchaEnabled && (
