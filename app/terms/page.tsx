@@ -54,10 +54,10 @@ export default function TermsPage() {
             <p className="mt-2">ALEK propose une offre gratuite et des offres payantes mensuelles. Les limites de générations IA et les fonctionnalités incluses sont affichées sur la page Tarifs. Les devis et factures sont illimités sur les offres annoncées comme telles.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">6. Paiements et renouvellement</h2>
-            <p className="mt-2">Les abonnements payants sont traités via PayPal lorsqu&apos;ils sont activés. PayPal intervient comme prestataire de paiement ; ALEK fournit le service logiciel. Les abonnements se renouvellent jusqu&apos;à résiliation selon les informations présentées lors de la souscription.</p>
+            <p className="mt-2">Les nouveaux abonnements par carte bancaire sont traités via Stripe, directement depuis un formulaire intégré au site. Les anciens abonnements PayPal restent gérés par PayPal. ALEK fournit le service logiciel et ne conserve pas les numéros de carte. Les abonnements se renouvellent automatiquement chaque mois jusqu&apos;à résiliation selon les conditions présentées à la souscription.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">7. Résiliation</h2>
-            <p className="mt-2">Pour résilier, utilisez la page « Résilier votre contrat » du site, les paramètres PayPal ou contactez le support. Sous réserve des dispositions impératives, la résiliation s&apos;applique à la prochaine échéance.</p>
+            <p className="mt-2">Pour résilier, utilisez la page « Résilier votre contrat » du site ou contactez le support. Pour les abonnements PayPal existants, les paramètres PayPal restent également disponibles. Sous réserve des dispositions impératives, la résiliation s&apos;applique à la prochaine échéance.</p>
           </section>
           <p><a href="/resilier-votre-contrat" className="font-bold text-blue-700 underline">Résilier votre contrat en ligne</a></p><section><h2 className="text-xl font-bold text-stone-900">8. Propriété intellectuelle</h2>
             <p className="mt-2">ALEK, son interface, son logo, ses composants logiciels et ses contenus propres sont protégés. L’utilisateur conserve ses droits sur les informations qu’il saisit et reste responsable de disposer des droits nécessaires sur ces données.</p>
