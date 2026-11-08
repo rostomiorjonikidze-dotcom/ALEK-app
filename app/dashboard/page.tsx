@@ -1060,7 +1060,47 @@ export default function Home() {
     doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", NotoSansGeorgianBase64);
     doc.addFont("NotoSansGeorgian-Regular.ttf", "NotoGeorgian", "normal");
     const hasGeorgian = (value: string) => /[\u10a0-\u10ff\u1c90-\u1cbf]/u.test(value);
-    const setPdfFont = (value: string) => doc.setFont(hasGeorgian(value) ? "NotoGeorgian" : "NotoSans", "normal");
+    const mixedRuns = (value: string) => {
+      const runs: { text: string; font: "NotoSans" | "NotoGeorgian" }[] = [];
+      for (const character of Array.from(value)) {
+        const font = hasGeorgian(character) ? "NotoGeorgian" : "NotoSans";
+        const last = runs[runs.length - 1];
+        if (last?.font === font) last.text += character;
+        else runs.push({ text: character, font });
+      }
+      return runs;
+    };
+    const mixedWidth = (value: string) => mixedRuns(value).reduce((sum, run) => {
+      doc.setFont(run.font, "normal");
+      return sum + doc.getTextWidth(run.text);
+    }, 0);
+    const drawMixed = (value: string, x: number, y: number, rightAligned = false) => {
+      let at = rightAligned ? x - mixedWidth(value) : x;
+      for (const run of mixedRuns(value)) {
+        doc.setFont(run.font, "normal");
+        doc.text(run.text, at, y);
+        at += doc.getTextWidth(run.text);
+      }
+    };
+    const wrapMixed = (value: string, width: number): string[] => {
+      const lines: string[] = [];
+      let current = "";
+      for (const word of value.trim().split(/\s+/u)) {
+        const proposed = current ? current + " " + word : word;
+        if (mixedWidth(proposed) <= width) { current = proposed; continue; }
+        if (current) { lines.push(current); current = ""; }
+        current = word;
+        while (current && mixedWidth(current) > width) {
+          let cut = 1;
+          while (cut < Array.from(current).length && mixedWidth(Array.from(current).slice(0, cut + 1).join("")) <= width) cut++;
+          const points = Array.from(current);
+          lines.push(points.slice(0, cut).join(""));
+          current = points.slice(cut).join("");
+        }
+      }
+      if (current) lines.push(current);
+      return lines.length ? lines : ["—"];
+    };
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const left = 18;
@@ -1072,9 +1112,8 @@ export default function Home() {
     const textBlock = (label: string, value: string, x: number, y: number, width: number) => {
       doc.setFont("helvetica", "bold");
       doc.text(label, x, y);
-      setPdfFont(safe(value));
-      const lines = doc.splitTextToSize(safe(value), width) as string[];
-      doc.text(lines, x, y + 6);
+      const lines = wrapMixed(safe(value), width);
+      lines.forEach((line, index) => drawMixed(line, x, y + 6 + index * 5));
       return y + 6 + lines.length * 5;
     };
     doc.setFillColor(15, 35, 71);
@@ -1084,8 +1123,7 @@ export default function Home() {
     doc.setFontSize(21);
     doc.text(documentType === "facture" ? "FACTURE" : "DEVIS", left, 22);
     doc.setFontSize(10);
-    setPdfFont(safe(number));
-    doc.text(safe(number), right, 22, { align: "right" });
+    drawMixed(safe(number), right, 22, true);
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -1100,32 +1138,28 @@ export default function Home() {
     let companyY = textBlock("ÉMETTEUR", businessName, left + 4, 73, 75);
     for (const line of [businessAddress, businessPhone, businessEmail, `SIRET : ${safe(businessSiret)}`]) {
       if (companyY > 115) break;
-      setPdfFont(safe(line));
-      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
-      doc.text(wrapped, left + 4, companyY);
+      const wrapped = wrapMixed(safe(line), 75);
+      wrapped.forEach((part, index) => drawMixed(part, left + 4, companyY + index * 4.5));
       companyY += wrapped.length * 4.5;
     }
     let clientY = textBlock("CLIENT", clientName, 112, 73, 75);
     for (const line of [clientAddress, clientPhone, clientEmail]) {
       if (clientY > 115) break;
-      setPdfFont(safe(line));
-      const wrapped = doc.splitTextToSize(safe(line), 75) as string[];
-      doc.text(wrapped, 112, clientY);
+      const wrapped = wrapMixed(safe(line), 75);
+      wrapped.forEach((part, index) => drawMixed(part, 112, clientY + index * 4.5));
       clientY += wrapped.length * 4.5;
     }
 
-    setPdfFont(safe(frenchText));
-    const descriptionLines = doc.splitTextToSize(safe(frenchText), 174) as string[];
+    const descriptionLines = wrapMixed(safe(frenchText), 174);
     let descriptionY = 133;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("Description des travaux", left, descriptionY);
     descriptionY += 7;
-    setPdfFont(safe(frenchText));
     doc.setFontSize(9);
     for (const line of descriptionLines) {
       if (descriptionY > pageHeight - 32) { doc.addPage(); descriptionY = 24; }
-      doc.text(line, left, descriptionY);
+      drawMixed(line, left, descriptionY);
       descriptionY += 4.5;
     }
     if (descriptionY > pageHeight - 40) { doc.addPage(); descriptionY = 24; }
@@ -1141,7 +1175,20 @@ export default function Home() {
         `${serviceTotal(item).toFixed(2)} EUR`,
       ]),
       styles: { font: "NotoSans", fontSize: 9, cellPadding: 3, overflow: "linebreak" },
-      didParseCell: (cell) => { if (hasGeorgian(String(cell.cell.text.join(" ")))) cell.cell.styles.font = "NotoGeorgian"; },
+      didParseCell: (cell) => {
+        const value = String(cell.cell.raw ?? "");
+        if (cell.section === "body" && cell.column.index === 0 && hasGeorgian(value)) {
+          cell.cell.text = wrapMixed(value, 72).map(() => " ");
+        }
+      },
+      didDrawCell: (cell) => {
+        const value = String(cell.cell.raw ?? "");
+        if (cell.section === "body" && cell.column.index === 0 && hasGeorgian(value)) {
+          doc.setTextColor(30, 41, 59);
+          doc.setFontSize(9);
+          wrapMixed(value, 72).forEach((line, index) => drawMixed(line, cell.cell.x + 3, cell.cell.y + 6 + index * 4.5));
+        }
+      },
       headStyles: { fillColor: [27, 72, 144] },
       alternateRowStyles: { fillColor: [246, 249, 253] },
       columnStyles: { 0: { cellWidth: 78 }, 1: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 34 } },
@@ -1170,8 +1217,7 @@ export default function Home() {
     for (const detail of details) {
       const lines = doc.splitTextToSize(detail, 170) as string[];
       if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
-      setPdfFont(detail);
-      doc.text(lines, left, y);
+      wrapMixed(detail, 170).forEach((line, index) => drawMixed(line, left, y + index * 5));
       y += lines.length * 5 + 2;
     }
     const pageCount = doc.getNumberOfPages();
