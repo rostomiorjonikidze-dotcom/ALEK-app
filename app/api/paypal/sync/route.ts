@@ -16,7 +16,14 @@ export async function POST(request:Request) {
   const details=await subscription(id);
   if(details.custom_id!==user.id) return NextResponse.json({error:"Subscription owner mismatch"},{status:403});
   const pro=process.env.PAYPAL_PRO_PLAN_ID, business=process.env.PAYPAL_BUSINESS_PLAN_ID;
-  const matchedPlan=details.plan_id===pro?"pro":details.plan_id===business?"business":null;
+  const env=process.env.PAYPAL_ENV?.toLowerCase()==="live"?"live":"sandbox";
+  const {data:aliases,error:aliasesError}=await db.from("artisan_paypal_plan_overrides")
+    .select("tier,paypal_plan_id").eq("environment",env);
+  if(aliasesError) return NextResponse.json({error:"Billing configuration unavailable"},{status:503});
+  const matchedPlan=details.plan_id===pro?"pro":details.plan_id===business?"business":
+    aliases?.find((row:{tier:string;paypal_plan_id:string})=>row.paypal_plan_id===details.plan_id)?.tier||null;
+  if(matchedPlan!=="pro" && matchedPlan!=="business")
+    return NextResponse.json({error:"Unrecognized subscription plan"},{status:403});
   if(!matchedPlan) return NextResponse.json({error:"Unrecognized subscription plan"},{status:403});
   const status=String(details.status || "").toUpperCase();
   const plan=status==="ACTIVE"?matchedPlan:"free";
