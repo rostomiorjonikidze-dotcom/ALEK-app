@@ -106,7 +106,7 @@ export default function EmbeddedCardCheckout({plan,onDone}:{plan:Tier;onDone:(me
         Saisie de la carte directement sur ALEK Artisan, sans redirection vers PayPal.
       </p>
       <p className="mt-3 text-xs text-slate-500">
-        Abonnement renouvelé automatiquement chaque mois jusqu'à résiliation.
+        Abonnement renouvelé automatiquement chaque mois jusqu&apos;à résiliation.
         Les données de votre carte sont traitées par Stripe et ne sont pas enregistrées par ALEK.
       </p>
       {key&&<Script src="https://js.stripe.com/v3/" strategy="afterInteractive" onReady={()=>setScriptLoaded(true)} onError={()=>{setError("Le formulaire Stripe n'a pas pu être chargé.");setLoading(false);}}/>}
