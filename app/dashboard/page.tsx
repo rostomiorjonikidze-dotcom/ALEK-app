@@ -1043,6 +1043,14 @@ export default function Home() {
       scrollToSection("settings-section");
       return false;
     }
+    if (/\[?NON[- ]DIFFUSIBLE\]?/i.test([businessName,businessAddress,clientName,clientAddress].join(" "))) {
+      alert("Les coordonnées indiquent « NON-DIFFUSIBLE ». Renseignez manuellement les identités et adresses réelles avant d’émettre un document.");
+      return false;
+    }
+    if (![9, 14].includes(businessSiret.replace(/\D/g, "").length)) {
+      alert("Le SIREN doit contenir 9 chiffres ou le SIRET 14 chiffres.");
+      return false;
+    }
     if (vatExemptionConfirmed && vatRate !== 0) {
       alert("La franchise en base de TVA nécessite un taux à 0 %.");
       return false;
