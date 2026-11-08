@@ -1215,9 +1215,9 @@ export default function Home() {
       // The 40 EUR clause above already includes its legal reference.
     }
     for (const detail of details) {
-      const lines = doc.splitTextToSize(detail, 170) as string[];
+      const lines = wrapMixed(detail, 170);
       if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
-      wrapMixed(detail, 170).forEach((line, index) => drawMixed(line, left, y + index * 5));
+      lines.forEach((line, index) => drawMixed(line, left, y + index * 5));
       y += lines.length * 5 + 2;
     }
     const pageCount = doc.getNumberOfPages();
