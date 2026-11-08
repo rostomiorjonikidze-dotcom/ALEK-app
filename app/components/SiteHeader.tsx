@@ -8,7 +8,7 @@ const links = [
   { href: "/a-propos", label: "À propos" },
   { href: "/pricing", label: "Tarifs" },
   { href: "/outils-pro", label: "Outils Pro" },
-  { href: "/legal", label: "AI Legal" },
+  { href: "/legal", label: "Documents juridiques" },
 ] as const;
 
 export default function SiteHeader() {
