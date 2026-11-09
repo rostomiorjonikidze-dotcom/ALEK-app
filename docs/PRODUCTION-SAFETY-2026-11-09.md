@@ -48,7 +48,7 @@ fournis. Les scripts de catalogue ne lisent pas les lignes clients.
 ## Dossier par domaine
 
 - [Factures, calculs serveur, émission et reprise](INVOICE-DATABASE-SAFETY.md)
-- [Coordination des abonnements et recette fournisseurs](BILLING-PRODUCTION-SAFETY.md)
+- [Coordination des abonnements et recette fournisseurs](BILLING-RELEASE.md)
 - [Permissions, profils et tests d’isolation](SECURITY-PRODUCTION-SAFETY.md)
 - [Authentification, SMTP et DNS](AUTH-PRODUCTION-SAFETY.md)
 
@@ -95,6 +95,21 @@ fournis. Les scripts de catalogue ne lisent pas les lignes clients.
 
 ## Vérification de cette branche
 
-Les résultats intégrés et les limites de la recette sont consignés à la fin de
-l’implémentation. Les tests PostgreSQL emploient un contrat synthétique minimal et
-un cluster jetable local ; ils ne représentent pas un export de la production.
+- `npm test` : 106 tests réussis; `tests/public-smoke.test.mjs` : 32 réussis sur
+  l’application locale. Lint, typecheck et build réussis.
+- `tests/database/invoices/run.sh` : validation serveur, permissions, immutabilité,
+  reprise idempotente et concurrence réussies dans un cluster local jetable.
+- `tests/database/security-isolation.sh` : isolation à deux utilisateurs, protection
+  des profils et contrat de facturation combiné réussis dans un cluster local jetable,
+  y compris les courses inter-fournisseurs et les requêtes retardées à deux sessions.
+- Preview avec fixtures fictives : reprise de l’émission avec le même payload/clé
+  après réponse ambiguë, nouvelle création bloquée; récupération refusée pour lien
+  expiré et session ordinaire, champs désactivés sur mobile 390×844. Captures revues
+  et partagées dans la conversation. Aucun paiement ni e-mail envoyé.
+
+Les tests PostgreSQL emploient un contrat synthétique minimal, pas un export de la
+production. Les trois migrations restent candidates et n’ont été appliquées à
+aucun Supabase. Restent requis : schéma/RLS/ACL réels, Auth/SMTP/redirects/CAPTCHA,
+recette Stripe/PayPal sandbox et réconciliation périodique des droits expirés (aucun
+job livré ici). Les parcours de paiement n’ont pas été vérifiés dans un navigateur
+avec les fournisseurs; ne pas présenter cette branche comme prête à déployer.

@@ -59,11 +59,15 @@ as_pg_owner "$bindir/pg_ctl" -D "$data" \
   -l "$log" start >/dev/null
 server_started=yes
 
-createdb --host="$socket" --port="$port" --username="$db_user" "$db_name"
+"$bindir/createdb" --host="$socket" --port="$port" --username="$db_user" "$db_name"
 psql_fixture() {
-  psql --no-psqlrc --set=ON_ERROR_STOP=1 --host="$socket" --port="$port" \
+  "$bindir/psql" --no-psqlrc --set=ON_ERROR_STOP=1 --host="$socket" --port="$port" \
     --username="$db_user" --dbname="$db_name" "$@"
 }
 psql_fixture --file="$root/tests/database/security-fixture.sql"
+psql_fixture --file="$root/supabase/migrations/20261109020000_billing_coordination.sql"
 psql_fixture --file="$root/supabase/migrations/2026110903_profiles_protect_billing_fields.sql"
 psql_fixture --file="$root/tests/database/security-isolation.sql"
+psql_fixture --file="$root/tests/database/billing-coordination.sql"
+"$root/tests/database/billing-concurrency.sh" \
+  "$bindir" "$socket" "$port" "$db_user" "$db_name"

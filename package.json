@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/auth.test.mjs tests/company-match.test.mjs tests/document-drafts.test.mjs tests/document-issuance.test.mjs tests/document-math.test.mjs tests/document-policy.test.mjs tests/embedded-card-checkout.test.mjs tests/install-platform.test.mjs tests/pdf-runtime.test.mjs tests/pro-compliance.test.mjs tests/receipt-values.test.mjs tests/request-body.test.mjs tests/signature-routes.test.mjs tests/signature-validation.test.mjs tests/user-facing-error.test.mjs"
+    "test": "node --experimental-strip-types --test tests/auth.test.mjs tests/auth-flow.test.mjs tests/billing-provider-regressions.test.mjs tests/company-match.test.mjs tests/document-drafts.test.mjs tests/document-issuance.test.mjs tests/document-math.test.mjs tests/document-policy.test.mjs tests/embedded-card-checkout.test.mjs tests/install-platform.test.mjs tests/pdf-runtime.test.mjs tests/pro-compliance.test.mjs tests/receipt-values.test.mjs tests/receipt-route-security.test.mjs tests/request-body.test.mjs tests/signature-routes.test.mjs tests/signature-validation.test.mjs tests/user-facing-error.test.mjs"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.2.0",

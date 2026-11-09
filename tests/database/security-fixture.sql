@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS public.profiles, public.fixture_documents, public.fixture_c
   public.fixture_signatures, public.alek_synthetic_security_fixture CASCADE;
 
 CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE auth.users (id uuid PRIMARY KEY);
 CREATE OR REPLACE FUNCTION auth.uid()
 RETURNS uuid LANGUAGE sql STABLE
 SET search_path = pg_catalog
@@ -47,6 +48,7 @@ CREATE TABLE public.profiles (
   stripe_subscription_status text,
   stripe_customer_id text,
   stripe_price_id text,
+  stripe_updated_at timestamptz,
   subscription_updated_at timestamptz,
   ai_usage_count integer NOT NULL DEFAULT 0,
   company_name text
