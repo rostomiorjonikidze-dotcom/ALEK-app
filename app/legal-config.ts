@@ -8,5 +8,5 @@ export const LEGAL = {
   postalAddress:
     process.env.NEXT_PUBLIC_LEGAL_ADDRESS || "À compléter avant mise en production",
   country: "France",
-  updatedAt: "30 octobre 2026",
+  updatedAt: "9 novembre 2026",
 } as const;

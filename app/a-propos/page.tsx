@@ -1,7 +1,7 @@
 import SiteHeader from "../components/SiteHeader";
 import Link from "next/link";
 import type { Metadata } from "next";
-export const metadata: Metadata = { title: "À propos — L’univers ALEK", description: "Découvrez ALEK Artisan et les autres projets de l’écosystème ALEK : business, boutique et logiciels en développement." };
+export const metadata: Metadata = { title: "À propos — L’univers ALEK", description: "Découvrez ALEK Artisan et les autres projets de l’écosystème ALEK : services aux entreprises, boutique et logiciels en développement." };
 const projects = [
   {name:"ALEK Business",tag:"Mise en relation B2B",description:"Une plateforme de mise en relation entre les porteurs de projets et les professionnels, dans plusieurs secteurs d’activité.",url:"https://business.alek.best",icon:"🤝",live:true},
   {name:"ALEK Shop",tag:"Commerce en ligne",description:"Une boutique en ligne généraliste proposant des produits de différentes catégories.",url:"https://shop.alek.best",icon:"🛍️",live:true},
