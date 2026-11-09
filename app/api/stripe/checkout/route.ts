@@ -1,4 +1,5 @@
 import {hasBlockingStripeSubscription} from "../../../lib/payment-policy";
+import {billingIdempotencyKey} from "../../../lib/billing-idempotency";
 import {NextResponse} from "next/server";
 import {admin,userFrom} from "../../paypal/_shared";
 import {stripeConfigured,stripeRequest,validatedPrice,PLAN_CENTS,type Tier} from "../../../lib/stripe-billing";
@@ -43,7 +44,11 @@ export async function POST(request:Request){
       params.set("customer_email",user.email);
     }
     const session=await stripeRequest<{id?:string;client_secret?:string;amount_total?:number;mode?:string;url?:string}>(
-      "/v1/checkout/sessions",{method:"POST",params});
+      "/v1/checkout/sessions",{
+        method:"POST",
+        params,
+        idempotencyKey:billingIdempotencyKey("stripe","checkout",user.id),
+      });
     if(!session.client_secret || !session.id || session.mode!=="subscription"
       || (session.amount_total!==null && session.amount_total!==undefined && session.amount_total!==PLAN_CENTS[tier]))
       return NextResponse.json({error:"Impossible de vérifier les détails de l'abonnement."},{status:502});
