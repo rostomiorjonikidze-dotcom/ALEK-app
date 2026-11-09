@@ -23,12 +23,22 @@ CREATE TABLE public.documents (
   total_ttc numeric,
   vat_rate numeric NOT NULL,
   vat_exempt boolean NOT NULL DEFAULT false,
+  client_is_professional boolean NOT NULL DEFAULT false,
   invoice_status text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX documents_user_type_number_unique
+CREATE UNIQUE INDEX artisan_documents_user_type_number_unique
   ON public.documents (user_id, document_type, document_number)
-  WHERE document_number IS NOT NULL;
+  WHERE user_id IS NOT NULL AND document_number IS NOT NULL;
+-- Model the actual production counter table (RLS enabled without any API policies).
+CREATE TABLE public.artisan_document_counters (
+  user_id uuid NOT NULL,
+  kind text NOT NULL,
+  doc_year integer NOT NULL,
+  last_value integer NOT NULL,
+  PRIMARY KEY(user_id, kind, doc_year)
+);
+ALTER TABLE public.artisan_document_counters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY documents_select_own ON public.documents
   FOR SELECT TO authenticated USING (user_id = auth.uid());
@@ -57,10 +67,18 @@ AS $function$
 DECLARE
   v_number text;
   v_id uuid;
+  v_n integer;
+  v_kind text := p_payload->>'document_type';
+  v_date date := (p_payload->>'document_date')::date;
+  v_year integer := extract(year from (p_payload->>'document_date')::date);
+  v_prefix text := CASE WHEN p_payload->>'document_type' = 'facture' THEN 'FAC' ELSE 'DEV' END;
 BEGIN
-  SELECT 'FA-' || lpad((count(*) + 1)::text, 4, '0') INTO v_number
-    FROM public.documents
-    WHERE user_id = auth.uid() AND document_type = p_payload->>'document_type';
+  INSERT INTO public.artisan_document_counters(user_id, kind, doc_year, last_value)
+    VALUES(auth.uid(), v_kind, v_year, 1)
+  ON CONFLICT(user_id,kind,doc_year) DO UPDATE
+    SET last_value = public.artisan_document_counters.last_value + 1
+  RETURNING last_value INTO v_n;
+  v_number := v_prefix || '-' || v_year || '-' || lpad(v_n::text,3,'0');
   INSERT INTO public.documents (
     user_id, document_type, document_number, document_date, due_date,
     services, total_ht, total_vat, total_ttc, vat_rate, vat_exempt, invoice_status
@@ -74,7 +92,7 @@ BEGIN
       ELSE (p_payload->>'total_ht')::numeric END,
     (p_payload->>'total_vat')::numeric,
     (p_payload->>'total_ttc')::numeric,
-    (p_payload->>'vat_rate')::numeric, (p_payload->>'vat_exempt')::boolean,
+    (p_payload->>'vat_rate')::numeric, false,
     p_payload->>'invoice_status'
   ) RETURNING id INTO v_id;
   RETURN jsonb_build_object('id', v_id, 'document_number', v_number);
@@ -86,7 +104,14 @@ RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, auth, public
 AS $function$
+DECLARE
+  v_result jsonb;
 BEGIN
-  RETURN public.issue_artisan_document(p_payload);
+  v_result := public.issue_artisan_document(p_payload);
+  UPDATE public.documents SET
+    vat_exempt = COALESCE((p_payload->>'vat_exempt')::boolean,false),
+    client_is_professional = COALESCE((p_payload->>'client_is_professional')::boolean,false)
+  WHERE id = (v_result->>'id')::uuid AND user_id = auth.uid();
+  RETURN v_result;
 END;
 $function$;
