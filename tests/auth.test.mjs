@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { authErrorMessage, passwordIsStrong, initializeAuthSession, signupConfirmationMessage } from "../app/lib/auth.ts";
+import { authErrorMessage, initializeAuthCallbackSession, isAuthCallbackUrl, passwordIsStrong, initializeAuthSession, signupConfirmationMessage } from "../app/lib/auth.ts";
 
 test("registration and reset share the password policy", () => {
   assert.equal(passwordIsStrong("Valide1234!"), true);
@@ -41,6 +41,30 @@ test("wait for automatic PKCE exchange before reading the recovery session", asy
   });
   assert.equal(result, session);
   assert.deepEqual(calls, ["initialize", "session"]);
+});
+
+test("recognizes supported Supabase callback parameters in query and fragment", () => {
+  assert.equal(isAuthCallbackUrl("https://app.alek.best/login?code=pkce-code"), true);
+  assert.equal(isAuthCallbackUrl("https://app.alek.best/reset-password#access_token=fixture"), true);
+  assert.equal(isAuthCallbackUrl("https://app.alek.best/login?error_description=link+expired"), true);
+  assert.equal(isAuthCallbackUrl("https://app.alek.best/login"), false);
+});
+
+test("callback errors stop initialization instead of accepting a previous session", async () => {
+  for (const href of [
+    "https://app.alek.best/login?error=access_denied",
+    "https://app.alek.best/login#error_description=expired",
+  ]) {
+    await assert.rejects(initializeAuthCallbackSession({
+      async initialize() { assert.fail("must not initialize a failed callback"); },
+      async getSession() { assert.fail("must not accept an existing session"); },
+    }, href), /expired token/);
+  }
+
+  assert.equal(await initializeAuthCallbackSession({
+    async initialize() { assert.fail("ordinary login navigation is not a callback"); },
+    async getSession() { assert.fail("ordinary login navigation is not a callback"); },
+  }, "https://app.alek.best/login"), null);
 });
 
 test("a failed recovery exchange cannot use an unrelated existing session", async () => {
