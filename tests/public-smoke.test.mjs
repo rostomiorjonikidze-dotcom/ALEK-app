@@ -6,6 +6,7 @@ const publicPaths = [
   "/", "/login", "/pricing", "/dashboard", "/a-propos",
   "/contact", "/privacy", "/terms", "/refund", "/mentions-legales",
 ];
+const skipNavigationPaths = ["/", "/a-propos", "/contact", "/legal", "/outils-pro", "/pricing", "/welcome"];
 
 async function request(path, options = {}) {
   const controller = new AbortController();
@@ -19,6 +20,17 @@ async function request(path, options = {}) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+for (const path of skipNavigationPaths) {
+  test(`${path} provides a skip link and a main landmark after the site header`, async () => {
+    const response = await request(path);
+    assert.equal(response.status, 200, `${path}: HTTP ${response.status}`);
+    const html = await response.text();
+    assert.ok(html.includes('href="#contenu-principal"'), `${path}: lien de saut absent`);
+    assert.ok(/<main\b[^>]*id="contenu-principal"[^>]*tabindex="-1"/i.test(html), `${path}: landmark principal absent ou non focalisable`);
+    assert.ok(html.indexOf("<header") < html.indexOf('id="contenu-principal"'), `${path}: l’en-tête doit précéder le contenu principal`);
+  });
 }
 
 for (const path of publicPaths) {

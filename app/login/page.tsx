@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { supabase } from "../lib/supabase";
 
-import { authErrorMessage, initializeAuthSession, passwordIsStrong } from "../lib/auth";
+import { authErrorMessage, initializeAuthSession, passwordIsStrong, signupConfirmationMessage } from "../lib/auth";
 
 type Mode = "login" | "signup";
 
@@ -39,8 +39,7 @@ const texts = {
       "Le mot de passe doit contenir une majuscule, une minuscule, un chiffre et un caractère spécial.",
     passwordsMismatch: "Les mots de passe ne correspondent pas.",
     captchaRequired: "Veuillez compléter la vérification CAPTCHA.",
-    signupSuccess:
-      "Inscription réussie. Consultez votre e-mail pour confirmer votre compte.",
+    signupSuccess: signupConfirmationMessage,
     accountReady: "Votre compte est prêt. Connectez-vous.",
     privacy:
       "En vous inscrivant, vous confirmez que les informations professionnelles fournies sont exactes.",
@@ -414,7 +413,7 @@ export default function LoginPage() {
                   borderRadius: "9px",
                 }}
               >
-                Minimum 10 caractères : majuscule, minuscule, chiffre et caractère spécial.
+                10 caractères minimum : majuscule, minuscule, chiffre et caractère spécial.
               </div>
 
 

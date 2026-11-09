@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
 import { supabase } from "../lib/supabase";
 import { buildTemplate, checkCompliance, paymentClauses, reminder, type ClientKind, type ComplianceInput, type TemplateKind } from "../lib/pro-compliance";
+import { userFacingError } from "../lib/user-facing-error";
 
 type Doc = {
   id:string; document_type:"devis"|"facture"; document_number:string; document_date:string;
@@ -17,6 +18,7 @@ type Doc = {
 type Expense = { id:string; merchant:string; document_date:string|null; total_ttc:number; total_ht:number|null; vat_amount:number|null; category:string; description:string|null; invoice_number:string|null; currency:string };
 type Scan = { merchant:string; date:string; total_ttc:number|null; total_ht:number|null; vat:number|null; category:string; description:string; invoice_number:string; currency:string; confidence:number };
 type Tab = "scanner"|"conformite"|"modeles"|"relances"|"signature";
+type AccessState = "loading"|"ready"|"auth-error";
 const categories = [["materiaux","Matériaux"],["carburant","Carburant"],["transport","Transport"],["outillage","Outillage"],["repas","Repas"],["logiciels","Logiciels"],["telecom","Télécommunications"],["loyer","Loyer"],["assurance","Assurance"],["autres","Autres"]];
 const tabs: {key:Tab;icon:string;name:string}[] = [
   {key:"scanner",icon:"◈",name:"Scanner des reçus"},{key:"conformite",icon:"✓",name:"Conformité"},{key:"modeles",icon:"▤",name:"Modèles français"},{key:"relances",icon:"✉",name:"Relances clients"},{key:"signature",icon:"✎",name:"Signature du devis"}
@@ -35,6 +37,7 @@ export default function ProToolsPage(){
   const [expenses,setExpenses]=useState<Expense[]>([]);
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
+  const [access,setAccess]=useState<AccessState>("loading");
   const [scan,setScan]=useState<Scan|null>(null);
   const [scanFile,setScanFile]=useState<File|null>(null);
   const [selected,setSelected]=useState("");
@@ -51,18 +54,25 @@ export default function ProToolsPage(){
   useEffect(()=>{
     let active=true;
     void (async()=>{
-      const {data:{user}}=await supabase.auth.getUser();
-      if(!active)return;
-      if(!user){router.push("/login");return;}
-      setUserId(user.id);
-      const [d,e]=await Promise.all([
-        supabase.from("documents").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(100),
-        supabase.from("artisan_expenses").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(50)
-      ]);
-      if(!active)return;
-      if(d.error)setMessage("Impossible de charger les documents.");
-      else {setDocuments(d.data||[]); if(d.data?.length)setSelected(d.data[0].id);}
-      if(!e.error)setExpenses(e.data||[]);
+      try {
+        const {data,error}=await supabase.auth.getUser();
+        if(!active)return;
+        if(error){setMessage(userFacingError("auth"));setAccess("auth-error");return;}
+        if(!data.user){router.push("/login");return;}
+        setUserId(data.user.id);
+        const [d,e]=await Promise.all([
+          supabase.from("documents").select("*").eq("user_id",data.user.id).order("created_at",{ascending:false}).limit(100),
+          supabase.from("artisan_expenses").select("*").eq("user_id",data.user.id).order("created_at",{ascending:false}).limit(50)
+        ]);
+        if(!active)return;
+        if(d.error)setMessage(userFacingError("load"));
+        else {setDocuments(d.data||[]); if(d.data?.length)setSelected(d.data[0].id);}
+        if(e.error)setMessage(userFacingError("load"));
+        else setExpenses(e.data||[]);
+        setAccess("ready");
+      } catch {
+        if(active){setMessage(userFacingError("auth"));setAccess("auth-error");}
+      }
     })();
     return()=>{active=false;};
   },[router]);
@@ -95,13 +105,14 @@ export default function ProToolsPage(){
         reader.onload=()=>resolve(String(reader.result||""));reader.onerror=()=>reject(Error("Fichier illisible"));reader.readAsDataURL(scanFile);
       });
       const {data:{session}}=await supabase.auth.getSession();
-      if(!session)throw Error("Session expirée.");
+      if(!session){setMessage(userFacingError("auth"));return;}
       const response=await fetch("/api/receipts/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify({image:fileData})});
+      if(!response.ok){setMessage(response.status===401?userFacingError("auth"):userFacingError("scan"));return;}
       const body=await response.json();
-      if(!response.ok)throw Error(body.error||"Analyse impossible.");
+      if(!body.data){setMessage(userFacingError("scan"));return;}
       setScan(body.data);
       setMessage("Extraction terminée. Vérifiez chaque champ avant de sauvegarder.");
-    }catch(e){setMessage(e instanceof Error?e.message:"Erreur d'analyse.");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("scan"));}finally{setBusy(false);}
   }
   async function saveExpense(){
     if(!userId||!scan||scan.total_ttc===null||!Number.isFinite(scan.total_ttc)||scan.total_ttc<0){setMessage("Le montant TTC doit être vérifié et renseigné.");return;}
@@ -113,10 +124,10 @@ export default function ProToolsPage(){
         vat_amount:scan.vat,category:scan.category,description:scan.description||null,
         invoice_number:scan.invoice_number||null,currency:scan.currency||"EUR",source:"ocr_verified",
       }).select("*").single();
-      if(error)throw Error(error.message);
+      if(error){setMessage(userFacingError("save"));return;}
       setExpenses(prev=>[data,...prev]);setScan(null);setScanFile(null);
       setMessage("Dépense enregistrée. La photo d'origine n'a pas été conservée.");
-    }catch(e){setMessage(e instanceof Error?e.message:"Enregistrement impossible.");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("save"));}finally{setBusy(false);}
   }
   function editScan(field:keyof Scan,value:string){
     setScan(prev=>prev?{...prev,[field]:["total_ttc","total_ht","vat","confidence"].includes(field)?(value===""?null:Number(value)):value}:prev);
@@ -126,24 +137,26 @@ export default function ProToolsPage(){
     setTemplateInfo({provider:selectedDoc.business_name||"",providerAddress:selectedDoc.business_address||"",providerSiret:selectedDoc.business_siret||"",client:selectedDoc.client_name||"",clientAddress:selectedDoc.client_address||"",description:selectedDoc.description||selectedDoc.services?.map(s=>s.description).join("; ")||"",amount:money(selectedDoc.total_ttc)+" TTC",deadline:selectedDoc.due_date||""});
   }
   async function refreshSignatures(){
-    try { const {data:{session}}=await supabase.auth.getSession(); if(!session)return;
+    try { const {data:{session},error}=await supabase.auth.getSession(); if(error||!session){setMessage(userFacingError("auth"));return;}
       const res=await fetch("/api/signatures",{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
-      if(res.ok){const body=await res.json();setSignatureRequests(body.requests||[]);}
-    } catch {/* Liste facultative, pas de blocage de la création de devis. */}
+      if(!res.ok){setMessage(res.status===401?userFacingError("auth"):userFacingError("signature"));return;}
+      const body=await res.json();setSignatureRequests(body.requests||[]);
+    } catch {setMessage(userFacingError("signature"));}
   }
   async function createSignatureLink(){
     if(!selectedDoc||selectedDoc.document_type!=="devis")return;
     setBusy(true);setMessage("");setSignatureLink("");
     try {
       const {data:{session}}=await supabase.auth.getSession();
-      if(!session)throw Error("Veuillez vous reconnecter.");
+      if(!session){setMessage(userFacingError("auth"));return;}
       const response=await fetch("/api/signatures",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify({documentId:selectedDoc.id})});
-      const body=await response.json();if(!response.ok)throw Error(body.error||"Création impossible");
+      if(!response.ok){setMessage(response.status===401?userFacingError("auth"):userFacingError("signature"));return;}
+      const body=await response.json();if(typeof body.url!=="string"){setMessage(userFacingError("signature"));return;}
       setSignatureLink(body.url);setMessage("Lien créé, valable 14 jours. Envoyez-le seulement au destinataire prévu.");await refreshSignatures();
-    }catch(e){setMessage(e instanceof Error?e.message:"Création impossible");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("signature"));}finally{setBusy(false);}
   }
   const docSelector=<select className={inputClass} value={selected} onChange={e=>{setSelected(e.target.value);setSignatureLink("");}}><option value="">Choisir un document enregistré</option>{documents.map(doc=><option key={doc.id} value={doc.id}>{doc.document_type==="devis"?"Devis":"Facture"} {doc.document_number||"sans numéro"} · {doc.client_name||"Sans client"}</option>)}</select>;
-  return <main className="min-h-screen bg-[#f3f6fc] text-[#14213b]"><SiteHeader/>
+  return <><SiteHeader/><main id="contenu-principal" tabIndex={-1} className="min-h-screen scroll-mt-24 bg-[#f3f6fc] text-[#14213b]">
     <section className="bg-gradient-to-br from-[#06162e] via-[#143770] to-[#1d57ad] px-5 py-14 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-bold uppercase tracking-[.2em] text-blue-200">ALEK ARTISAN · OUTILS PROFESSIONNELS</p><h1 className="mt-4 text-4xl font-black sm:text-5xl">Gérez vos documents en confiance.</h1><p className="mt-4 max-w-3xl text-blue-100">OCR des dépenses, contrôle des mentions, documents français, relances et devis à signer. Vos décisions restent sous votre contrôle.</p><Link href="/dashboard" className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#143770]">← Retour à mes devis et factures</Link></div></section>
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" role="tablist" aria-label="Outils professionnels">{tabs.map(t=><button key={t.key} role="tab" aria-selected={tab===t.key} onClick={()=>{setTab(t.key);setMessage("");if(t.key==="signature")void refreshSignatures();}} className={"rounded-2xl border px-4 py-4 text-left text-sm font-bold shadow-sm transition "+(tab===t.key?"border-blue-700 bg-blue-700 text-white":"border-blue-100 bg-white text-blue-900 hover:border-blue-400")}><span className="mr-2 text-lg">{t.icon}</span>{t.name}</button>)}</div>
@@ -181,5 +194,5 @@ export default function ProToolsPage(){
       </section>}
       <p className="mt-9 text-center text-xs text-slate-500">Outils d&apos;assistance — ne remplacent ni un expert-comptable ni un juriste. Les factures PDF ordinaires ne remplacent pas l&apos;e-facturation via plateforme agréée.</p>
     </div>
-  </main>;
+  </main></>;
 }
