@@ -48,7 +48,7 @@ fournis. Les scripts de catalogue ne lisent pas les lignes clients.
 ## Dossier par domaine
 
 - [Factures, calculs serveur, émission et reprise](INVOICE-DATABASE-SAFETY.md)
-- [Coordination des abonnements et recette fournisseurs](BILLING-PRODUCTION-SAFETY.md)
+- [Coordination des abonnements et recette fournisseurs](BILLING-RELEASE.md)
 - [Permissions, profils et tests d’isolation](SECURITY-PRODUCTION-SAFETY.md)
 - [Authentification, SMTP et DNS](AUTH-PRODUCTION-SAFETY.md)
 
