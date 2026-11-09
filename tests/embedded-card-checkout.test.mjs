@@ -8,7 +8,7 @@ const webhook=readFileSync("app/api/stripe/webhook/route.ts","utf8");
 const confirm=readFileSync("app/api/stripe/confirm/route.ts","utf8");
 
 test("checkout is embedded and cards only; no external PayPal redirect",()=>{
-  assert.match(checkout,/params\.set\("ui_mode","embedded_page"\)/);
+  assert.match(checkout,/params\.set\("ui_mode","embedded"\)/);
   assert.match(checkout,/params\.set\("redirect_on_completion","never"\)/);
   assert.match(checkout,/params\.set\("payment_method_types\[0\]","card"\)/);
   assert.match(pricing,/Payer par carte bancaire/);
