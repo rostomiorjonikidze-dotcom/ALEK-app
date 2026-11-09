@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "../../lib/request-body";
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { admin, userFrom } from "../paypal/_shared";
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   try {
     const user = await userFrom(request);
     if (!user) return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
-    const { documentId } = await request.json();
+    const { documentId } = await readJsonObject(request, 4_096);
     if (typeof documentId !== "string" || !/^[a-f0-9-]{36}$/i.test(documentId)) return NextResponse.json({ error: "Document invalide." }, { status: 400 });
     const db = admin();
     const { data: doc, error } = await db.from("documents").select("*").eq("id", documentId).eq("user_id", user.id).maybeSingle();
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
     });
     if (insertError) return NextResponse.json({ error: "Impossible de créer la demande de signature." }, { status: 503 });
     return NextResponse.json({ url: SITE_URL + "/sign/" + rawToken, expiresInDays: 14, note: "Signature électronique simple, sans vérification d'identité forte. Transmettez le lien au destinataire prévu." });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "Impossible de préparer la signature." }, { status: 500 });
   }
 }

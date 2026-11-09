@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "../../../lib/request-body";
 import { NextResponse } from "next/server";
 import { admin, userFrom } from "../../paypal/_shared";
 import { receiptNumberOrNull } from "../../../lib/receipt-values";
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 7_500_000) return NextResponse.json({ error: "Fichier trop volumineux." }, { status: 413 });
-    const body = await request.json();
+    const body = await readJsonObject(request, 6_200_000);
     const image = typeof body?.image === "string" ? body.image : "";
     const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(image);
     if (!match || image.length > 6_100_000) return NextResponse.json({ error: "Image JPEG, PNG ou WEBP (max. 4 Mo) requise." }, { status: 400 });
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
       if (reserved) await db.rpc("refund_ai_usage", { p_user_id: user.id });
       return NextResponse.json({ error: "Lecture impossible. Vérifiez la netteté de la photo et réessayez." }, { status: 502 });
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "Requête incorrecte." }, { status: 400 });
   }
 }
