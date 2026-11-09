@@ -1,4 +1,5 @@
 import {remainingPlan} from "../../../../lib/payment-policy";
+import {billingIdempotencyKey} from "../../../../lib/billing-idempotency";
 import {NextResponse} from "next/server";
 import {admin,paypalBase,paypalToken,subscription,userFrom} from "../../_shared";
 export const runtime="nodejs";
@@ -14,7 +15,7 @@ export async function POST(request:Request){
  if(current.custom_id!==user.id)return NextResponse.json({error:"Impossible de vérifier le titulaire de l’abonnement"},{status:403});
  if(current.status==="CANCELLED"||current.status==="EXPIRED"){const {error:syncError}=await db.from("profiles").update({plan,paypal_subscription_status:current.status,subscription_updated_at:new Date().toISOString()}).eq("id",user.id).eq("paypal_subscription_id",id);if(syncError)return NextResponse.json({error:"Abonnement résilié, mais synchronisation du compte indisponible."},{status:503});return NextResponse.json({status:current.status,message:"Abonnement déjà résilié."});}
  const token=await paypalToken();
- const result=await fetch(paypalBase()+"/v1/billing/subscriptions/"+encodeURIComponent(id)+"/cancel",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","PayPal-Request-Id":crypto.randomUUID()},body:JSON.stringify({reason:"Résiliation demandée par le titulaire depuis ALEK"}),cache:"no-store"});
+ const result=await fetch(paypalBase()+"/v1/billing/subscriptions/"+encodeURIComponent(id)+"/cancel",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","PayPal-Request-Id":billingIdempotencyKey("paypal","cancel",id)},body:JSON.stringify({reason:"Résiliation demandée par le titulaire depuis ALEK"}),cache:"no-store"});
  if(!result.ok)return NextResponse.json({error:"PayPal n’a pas confirmé la résiliation. Réessayez ou contactez le support."},{status:502});
  const verified=await subscription(id);
  if(verified.status!=="CANCELLED")return NextResponse.json({status:verified.status,message:"Demande envoyée. Vérifiez votre compte PayPal et contactez le support si nécessaire."});
