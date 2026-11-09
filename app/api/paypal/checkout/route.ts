@@ -1,3 +1,4 @@
+import { hasBlockingStripeSubscription } from "../../../lib/payment-policy";
 import { NextResponse } from "next/server";
 import { admin, paypalBase, paypalToken, userFrom } from "../_shared";
 
@@ -37,16 +38,20 @@ export async function POST(request: Request) {
   try {
     const user = await userFrom(request);
     if (!user) return NextResponse.json({ error: "Connexion requise." }, { status: 401 });
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const tier: Tier | null = body?.plan === "pro" ? "pro" : body?.plan === "business" ? "business" : null;
     if (!tier) return NextResponse.json({ error: "Formule sélectionnée invalide." }, { status: 400 });
     const db = admin();
     const { data: profile, error: profileError } = await db.from("profiles")
-      .select("role,paypal_subscription_id,paypal_subscription_status").eq("id", user.id).maybeSingle();
+      .select("role,paypal_subscription_id,paypal_subscription_status,stripe_subscription_id,stripe_subscription_status").eq("id", user.id).maybeSingle();
     if (profileError || !profile) return NextResponse.json({ error: "Profil indisponible." }, { status: 404 });
     if (profile.role === "owner") return NextResponse.json({ error: "Le compte administrateur dispose déjà de toutes les fonctionnalités." }, { status: 409 });
     if (profile.paypal_subscription_id && ["ACTIVE", "APPROVAL_PENDING", "APPROVED", "SUSPENDED"].includes(String(profile.paypal_subscription_status || "").toUpperCase())) {
       return NextResponse.json({ error: "Un abonnement existe déjà ou attend une validation. Vérifiez son statut avant de recommencer afin d’éviter un double abonnement." }, { status: 409 });
+    }
+
+    if (hasBlockingStripeSubscription(profile.stripe_subscription_id, profile.stripe_subscription_status)) {
+      return NextResponse.json({ error: "Un abonnement par carte existe déjà. Vérifiez son statut avant de souscrire avec PayPal afin d’éviter un double prélèvement." }, { status: 409 });
     }
 
     const configuredId = tier === "pro" ? process.env.PAYPAL_PRO_PLAN_ID : process.env.PAYPAL_BUSINESS_PLAN_ID;
@@ -55,8 +60,7 @@ export async function POST(request: Request) {
     const expected = prices[tier];
     const token = await paypalToken();
 
-    // A newly created plan leaves EXISTING PayPal subscribers on their original plan.
-    // Unlike editing the price of an existing plan, this never silently reprices them.
+    // Checkout validates existing plans; it must never change the billing catalog.
     const { data: override, error: lookupError } = await db.from("artisan_paypal_plan_overrides")
       .select("paypal_plan_id,expected_eur").eq("environment", env).eq("tier", tier).maybeSingle();
     if (lookupError) return NextResponse.json({ error: "Impossible de vérifier le plan PayPal." }, { status: 503 });
@@ -72,43 +76,7 @@ export async function POST(request: Request) {
       if (matchesPrice(existingPlan, expected)) {
         planId = configuredId;
       } else {
-        if (!existingPlan.product_id || !/^PROD-[A-Z0-9]+$/.test(existingPlan.product_id)) {
-          return NextResponse.json({ error: "Plan PayPal initial invalide." }, { status: 503 });
-        }
-        const created = await fetch(paypalBase() + "/v1/billing/plans", {
-          method: "POST", cache: "no-store",
-          headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-            "PayPal-Request-Id": "ALEK-" + env + "-" + tier + "-" + expected.replace(".", "-"),
-          },
-          body: JSON.stringify({
-            product_id: existingPlan.product_id,
-            name: "ALEK " + (tier === "pro" ? "Pro" : "Business") + " - " + expected + " EUR / mois",
-            description: "Abonnement mensuel ALEK Artisan",
-            billing_cycles: [{
-              frequency: { interval_unit: "MONTH", interval_count: 1 },
-              tenure_type: "REGULAR", sequence: 1, total_cycles: 0,
-              pricing_scheme: { fixed_price: { value: expected, currency_code: "EUR" } },
-            }],
-            payment_preferences: { auto_bill_outstanding: true, payment_failure_threshold: 1 },
-          }),
-        });
-        if (!created.ok) return NextResponse.json({ error: "Création du nouveau tarif PayPal impossible. Aucun paiement lancé." }, { status: 503 });
-        const newPlan = await created.json() as PaypalPlan;
-        if (!newPlan.id) return NextResponse.json({ error: "Réponse PayPal invalide" }, { status: 503 });
-        if (newPlan.status === "CREATED") {
-          const activated = await fetch(paypalBase() + "/v1/billing/plans/" + encodeURIComponent(newPlan.id) + "/activate", {
-            method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, cache: "no-store",
-          });
-          if (!activated.ok) return NextResponse.json({ error: "Activation du tarif PayPal impossible" }, { status: 503 });
-        }
-        const verified = await getPlan(newPlan.id, token);
-        if (!verified || !matchesPrice(verified, expected)) return NextResponse.json({ error: "Nouveau tarif non vérifié. Aucun paiement lancé." }, { status: 503 });
-        const { error: storeError } = await db.from("artisan_paypal_plan_overrides")
-          .upsert({ environment: env, tier, paypal_plan_id: newPlan.id, expected_eur: Number(expected) }, { onConflict: "environment,tier" });
-        if (storeError) return NextResponse.json({ error: "Tarif créé mais non enregistré. Aucun paiement lancé." }, { status: 503 });
-        planId = newPlan.id;
+        return NextResponse.json({ error: "Le tarif PayPal configuré ne correspond pas à cette formule. Contactez le support. Aucun paiement n’a été lancé." }, { status: 503 });
       }
     }
 
