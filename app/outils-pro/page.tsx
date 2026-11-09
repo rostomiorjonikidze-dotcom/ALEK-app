@@ -143,7 +143,7 @@ export default function ProToolsPage(){
     }catch(e){setMessage(e instanceof Error?e.message:"Création impossible");}finally{setBusy(false);}
   }
   const docSelector=<select className={inputClass} value={selected} onChange={e=>{setSelected(e.target.value);setSignatureLink("");}}><option value="">Choisir un document enregistré</option>{documents.map(doc=><option key={doc.id} value={doc.id}>{doc.document_type==="devis"?"Devis":"Facture"} {doc.document_number||"sans numéro"} · {doc.client_name||"Sans client"}</option>)}</select>;
-  return <main className="min-h-screen bg-[#f3f6fc] text-[#14213b]"><SiteHeader/>
+  return <><SiteHeader/><main id="contenu-principal" tabIndex={-1} className="min-h-screen scroll-mt-24 bg-[#f3f6fc] text-[#14213b]">
     <section className="bg-gradient-to-br from-[#06162e] via-[#143770] to-[#1d57ad] px-5 py-14 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-bold uppercase tracking-[.2em] text-blue-200">ALEK ARTISAN · OUTILS PROFESSIONNELS</p><h1 className="mt-4 text-4xl font-black sm:text-5xl">Gérez vos documents en confiance.</h1><p className="mt-4 max-w-3xl text-blue-100">OCR des dépenses, contrôle des mentions, documents français, relances et devis à signer. Vos décisions restent sous votre contrôle.</p><Link href="/dashboard" className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#143770]">← Retour à mes devis et factures</Link></div></section>
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" role="tablist" aria-label="Outils professionnels">{tabs.map(t=><button key={t.key} role="tab" aria-selected={tab===t.key} onClick={()=>{setTab(t.key);setMessage("");if(t.key==="signature")void refreshSignatures();}} className={"rounded-2xl border px-4 py-4 text-left text-sm font-bold shadow-sm transition "+(tab===t.key?"border-blue-700 bg-blue-700 text-white":"border-blue-100 bg-white text-blue-900 hover:border-blue-400")}><span className="mr-2 text-lg">{t.icon}</span>{t.name}</button>)}</div>
@@ -181,5 +181,5 @@ export default function ProToolsPage(){
       </section>}
       <p className="mt-9 text-center text-xs text-slate-500">Outils d&apos;assistance — ne remplacent ni un expert-comptable ni un juriste. Les factures PDF ordinaires ne remplacent pas l&apos;e-facturation via plateforme agréée.</p>
     </div>
-  </main>;
+  </main></>;
 }

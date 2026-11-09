@@ -15,3 +15,12 @@ export function remainingPlan(profile: {
   if (prices.pro && profile.stripe_price_id === prices.pro) return "pro";
   return "free";
 }
+
+export function planAfterPaypalSync(
+  status: string,
+  paypalTier: PaidTier | null,
+  otherProviderPlan: "free" | PaidTier,
+): "free" | PaidTier {
+  if (status.toUpperCase() !== "ACTIVE") return otherProviderPlan;
+  return otherProviderPlan !== "free" ? otherProviderPlan : paypalTier || "free";
+}
