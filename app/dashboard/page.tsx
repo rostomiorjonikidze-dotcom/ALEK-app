@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
-import { NotoSansBase64 } from "../lib/notosans-font";
-import { NotoSansGeorgianBase64 } from "../lib/notosansgeorgian-font";
 import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates } from "../lib/document-math";
+import { loadPdfRuntime } from "../lib/pdf-runtime";
+import { canDeleteDocument, canModifyDocument } from "../lib/document-policy";
+import { loadAccountDraft, saveAccountDraft } from "../lib/document-drafts";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -238,6 +237,8 @@ export default function Home() {
   const [usageCount, setUsageCount] = useState(0);
   const [userRole, setUserRole] = useState("user");
   const [userEmail, setUserEmail] = useState("");
+  const [draftUserId, setDraftUserId] = useState<string | null>(null);
+  const [loadedDraftUserId, setLoadedDraftUserId] = useState<string | null>(null);
 
   const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -252,7 +253,7 @@ export default function Home() {
   const [historySearch, setHistorySearch] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
+  const isReadOnlyInvoice = Boolean(selectedDocumentId && documentType === "facture");
 
   const materialFromServices = useMemo(
     () => services.filter((item) => item.type === "material").reduce((sum, item) => sum + serviceTotal(item), 0),
@@ -279,36 +280,35 @@ export default function Home() {
   }, [savedDocuments, historyFilter, historySearch]);
 
   useEffect(() => {
+    if (!draftUserId) return;
     try {
-      const raw = localStorage.getItem("alek-draft-v2");
-      if (raw) {
-        const draft = JSON.parse(raw);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
+      const draft = loadAccountDraft(localStorage, draftUserId);
+      if (draft) {
         setSiteLang("fr");
         setInputLang("fr");
-        setDescription(draft.description || "");
-        setFrenchText(draft.frenchText || "");
+        setDescription(String(draft.description || ""));
+        setFrenchText(String(draft.frenchText || ""));
         setServices(Array.isArray(draft.services) ? draft.services.map(normalizeService) : []);
-        setClientName(draft.clientName || "");
-        setClientAddress(draft.clientAddress || "");
-        setClientPhone(draft.clientPhone || "");
-        setClientEmail(draft.clientEmail || "");
-        setBusinessName(draft.businessName || "");
-        setBusinessAddress(draft.businessAddress || "");
-        setBusinessPhone(draft.businessPhone || "");
-        setBusinessEmail(draft.businessEmail || "");
-        setBusinessSiret(draft.businessSiret || "");
+        setClientName(String(draft.clientName || ""));
+        setClientAddress(String(draft.clientAddress || ""));
+        setClientPhone(String(draft.clientPhone || ""));
+        setClientEmail(String(draft.clientEmail || ""));
+        setBusinessName(String(draft.businessName || ""));
+        setBusinessAddress(String(draft.businessAddress || ""));
+        setBusinessPhone(String(draft.businessPhone || ""));
+        setBusinessEmail(String(draft.businessEmail || ""));
+        setBusinessSiret(String(draft.businessSiret || ""));
         setDocumentType(draft.documentType === "facture" ? "facture" : "devis");
         setDevisNumber("");
-        setDevisDate(draft.devisDate || "");
-        setValidUntil(draft.validUntil || "");
+        setDevisDate(String(draft.devisDate || todayInput()));
+        setValidUntil(String(draft.validUntil || datePlusDays(30)));
         setInvoiceNumber("");
-        setDevisReference(draft.devisReference || "");
-        setInvoiceDate(draft.invoiceDate || "");
-        setInvoiceDueDate(draft.invoiceDueDate || "");
-        setPaymentTerms(draft.paymentTerms || "");
-        setPaymentMethod(draft.paymentMethod || "");
-        setInvoiceStatus(draft.invoiceStatus || "unpaid");
+        setDevisReference(String(draft.devisReference || ""));
+        setInvoiceDate(String(draft.invoiceDate || ""));
+        setInvoiceDueDate(String(draft.invoiceDueDate || ""));
+        setPaymentTerms(String(draft.paymentTerms || ""));
+        setPaymentMethod(String(draft.paymentMethod || ""));
+        setInvoiceStatus(String(draft.invoiceStatus || "unpaid"));
         setVatRate(Number(draft.vatRate) || 0);
         setVatExemptionConfirmed(Boolean(draft.vatExemptionConfirmed));
         setClientIsProfessional(Boolean(draft.clientIsProfessional));
@@ -317,18 +317,16 @@ export default function Home() {
         setDevisDate(todayInput());
         setValidUntil(datePlusDays(30));
       }
+      setLoadedDraftUserId(draftUserId);
     } catch (error) {
       console.error("Draft load error", error);
-    } finally {
-      setHydrated(true);
     }
-  }, []);
+  }, [draftUserId]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(
-      "alek-draft-v2",
-      JSON.stringify({
+    if (!draftUserId || loadedDraftUserId !== draftUserId) return;
+    try {
+      saveAccountDraft(localStorage, draftUserId, {
         siteLang,
         inputLang,
         description,
@@ -357,10 +355,13 @@ export default function Home() {
         vatRate,
         vatExemptionConfirmed,
         clientIsProfessional,
-      }),
-    );
+      });
+    } catch (error) {
+      console.error("Draft save error", error);
+    }
   }, [
-    hydrated,
+    draftUserId,
+    loadedDraftUserId,
     siteLang,
     inputLang,
     description,
@@ -404,6 +405,7 @@ export default function Home() {
       router.push("/login");
       return;
     }
+    setDraftUserId(user.id);
     setUserEmail(user.email || "");
 
     const { data, error } = await supabase
@@ -665,6 +667,10 @@ export default function Home() {
   async function saveDocumentToDatabase() {
     // Document numbers are allocated by Supabase during the actual insert.
     // A client-local counter can produce duplicate legal invoice numbers.
+    if (selectedDocumentId && !canModifyDocument({ document_type: documentType })) {
+      alert("Cette facture émise est en lecture seule. La création d’un avoir n’est pas disponible dans le schéma actuel.");
+      return;
+    }
     if (savingDocument || !validateDocument(Boolean(selectedDocumentId))) return;
     setSavingDocument(true);
     try {
@@ -740,6 +746,11 @@ export default function Home() {
   }
 
   async function deleteSavedDocument(id: string) {
+    const target = savedDocuments.find((document) => document.id === id);
+    if (!target || !canDeleteDocument(target)) {
+      alert("Une facture émise ne peut pas être supprimée depuis cette interface.");
+      return;
+    }
     if (!window.confirm(`${t.delete}?`)) return;
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) { alert(t.loginRequired); return; }
@@ -798,14 +809,15 @@ export default function Home() {
     return true;
   }
 
-  function createPdf() {
+  async function createPdf() {
     if (!validateDocument()) return;
     if(vatExemptionConfirmed && vatRate!==0){alert("La franchise en base de TVA nécessite un taux de TVA à 0 %.");return;}
     if(vatRate===0 && !vatExemptionConfirmed && !window.confirm("TVA à 0 % : confirmez que votre régime de TVA ou l’exonération applicable est correctement documenté. Continuer sans mention article 293 B ?"))return;
+    const { jsPDF, autoTable, latinFont, georgianFont } = await loadPdfRuntime();
     const doc = new jsPDF();
-    doc.addFileToVFS("NotoSans-Regular.ttf", NotoSansBase64);
+    doc.addFileToVFS("NotoSans-Regular.ttf", latinFont);
     doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
-    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", NotoSansGeorgianBase64);
+    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", georgianFont);
     doc.addFont("NotoSansGeorgian-Regular.ttf", "NotoGeorgian", "normal");
     const hasGeorgian = (value: string) => /[\u10a0-\u10ff\u1c90-\u1cbf]/u.test(value);
     const mixedRuns = (value: string) => {
@@ -990,6 +1002,13 @@ export default function Home() {
       doc.text(`ALEK Artisan · ${page} / ${pageCount}`, right, pageHeight - 10, { align: "right" });
     }
     doc.save(`ALEK-${documentType === "facture" ? "Facture" : "Devis"}-${safe(number).replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`);
+  }
+
+  function exportPdf() {
+    void createPdf().catch((error) => {
+      console.error("PDF export failed", error);
+      alert("Impossible de créer le PDF. Réessayez après avoir vérifié le document.");
+    });
   }
 
   const navButton = "w-full rounded-xl px-4 py-3 text-left font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400";

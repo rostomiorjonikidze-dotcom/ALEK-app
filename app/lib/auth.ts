@@ -5,7 +5,7 @@ export function authErrorMessage(error: unknown): string {
     : error && typeof error === "object" && "message" in error ? String(error.message) : "";
   if (/invalid login credentials|invalid password|invalid credentials/i.test(message)) return "Adresse e-mail ou mot de passe incorrect.";
   if (/email not confirmed/i.test(message)) return "Veuillez confirmer votre adresse e-mail avant de vous connecter.";
-  if (/already registered/i.test(message)) return "Cette adresse e-mail est déjà utilisée.";
+  if (/already registered/i.test(message)) return "Inscription impossible avec ces informations. Vérifiez-les et réessayez.";
   if (/same_password|same password|different from the old/i.test(message)) return "Choisissez un mot de passe différent de l’ancien.";
   if (/password.*(?:weak|short|at least)/i.test(message)) return "Le mot de passe ne respecte pas les critères de sécurité.";
   if (/rate limit|too many requests|security purposes/i.test(message)) return "Trop de tentatives. Réessayez un peu plus tard.";

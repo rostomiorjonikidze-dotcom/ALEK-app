@@ -414,7 +414,7 @@ export default function LoginPage() {
                   borderRadius: "9px",
                 }}
               >
-                Minimum 10 caractères : majuscule, minuscule, chiffre et caractère spécial.
+                10 caractères minimum : majuscule, minuscule, chiffre et caractère spécial.
               </div>
 
 
