@@ -38,9 +38,43 @@ FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public' AND NOT t.tgisinternal ORDER BY c.relname, t.tgname;
 
+-- Receipts/signatures and ownership columns need their own RLS review; a table
+-- name inferred from application routes is not proof that it exists in production.
+SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled,
+       c.relforcerowsecurity AS rls_forced, pg_get_userbyid(c.relowner) AS owner,
+       a.attname AS ownership_or_integrity_column, format_type(a.atttypid, a.atttypmod) AS data_type
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+WHERE n.nspname = 'public'
+  AND (c.relname ~* '(receipt|signature|document|profile)'
+       OR a.attname ~* '(^|_)(user_id|owner_id|token_hash|signature_hash|document_hash|signed_at|consent)(_|$)')
+ORDER BY c.relname, a.attnum;
+
+SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename ~* '(receipt|signature|document|profile)'
+ORDER BY tablename, policyname;
+
 SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS arguments,
        p.prosecdef AS security_definer, p.proconfig, p.proacl,
        pg_get_functiondef(p.oid) AS definition
 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public' AND p.prokind = 'f' ORDER BY p.proname;
+WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p') ORDER BY p.proname;
+
+-- Effective routine EXECUTE access, including the default PUBLIC grant when
+-- proacl is NULL. Confirm these roles exist before interpreting the output.
+SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS arguments,
+       p.prokind, p.prosecdef AS security_definer,
+       pg_get_userbyid(p.proowner) AS owner, p.proconfig,
+       CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+            THEN has_function_privilege('anon', p.oid, 'EXECUTE') END AS anon_can_execute,
+       CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+            THEN has_function_privilege('authenticated', p.oid, 'EXECUTE') END AS authenticated_can_execute,
+       CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role')
+            THEN has_function_privilege('service_role', p.oid, 'EXECUTE') END AS service_role_can_execute
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public' AND p.prokind IN ('f', 'p')
+ORDER BY p.proname, pg_get_function_identity_arguments(p.oid);
 ROLLBACK;
