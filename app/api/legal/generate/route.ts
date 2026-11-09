@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "../../../lib/request-body";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Groq from "groq-sdk";
@@ -13,7 +14,7 @@ export async function POST(req:NextRequest){
   const {data:{user},error}=await db.auth.getUser(token);
   if(error||!user)return NextResponse.json({error:"Session expirée."},{status:401});
   let body:Record<string,unknown>;
-  try{body=await req.json();}catch{return NextResponse.json({error:"Requête invalide."},{status:400});}
+  try{body=await readJsonObject(req, 32_000);}catch(error){if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });return NextResponse.json({error:"Requête invalide."},{status:400});}
   const kind=String(body.kind||"").slice(0,80),sector=String(body.sector||"").trim().slice(0,180);
   const situation=String(body.situation||"").trim().slice(0,5000);
   const company=String(body.company||"").trim().slice(0,250);
@@ -33,8 +34,8 @@ export async function POST(req:NextRequest){
     const document=answer.choices[0]?.message?.content?.trim();
     if(!document)throw new Error("empty response");
     return NextResponse.json({document,disclaimer:"Brouillon assisté par IA : vérification humaine et juridique requise avant utilisation.",remaining:q.remaining});
-  }catch(e){
-    console.error("Legal generation failed",e);
+  }catch{
+    console.error("Legal generation failed");
     if(refundable)await db.rpc("refund_ai_usage",{p_user_id:user.id});
     return NextResponse.json({error:"Génération momentanément indisponible."},{status:502});
   }
