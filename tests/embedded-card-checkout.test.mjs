@@ -76,34 +76,11 @@ test("highest active entitlement is selected in both provider orderings",()=>{
   assert.equal(planAfterPaypalSync("CANCELLED","business","pro"),"pro");
 });
 
-test("Stripe reconciliation resolves active PayPal Business through configured aliases",async()=>{
+test("provider reconciliation delegates profile writes to the ordered database RPC",()=>{
   const source=readFileSync("app/lib/stripe-reconcile.ts","utf8");
-  const exports={};
-  let saved;
-  const profile={role:"user",plan:"pro",paypal_subscription_id:"I-ALIAS123456789",paypal_subscription_status:"ACTIVE",stripe_subscription_id:null,stripe_subscription_status:null};
-  const db={from(table){
-    const query={values:null,select(){return query;},eq(){return query;},update(values){query.values=values;return query;},
-      async maybeSingle(){return {data:table==="profiles"?profile:null,error:null};},
-      then(resolve){if(query.values)saved=query.values;return Promise.resolve({data:[{tier:"business",paypal_plan_id:"P-OVERRIDE-BUSINESS"}],error:null}).then(resolve);}};
-    return query;
-  }};
-  runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-    exports,process:{env:{PAYPAL_ENV:"sandbox"}},Date,
-    require(name){
-      if(name==="server-only")return {};
-      if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription,planAfterPaypalSync};
-      if(name.endsWith("_shared"))return {admin:()=>db,subscription:async()=>({id:profile.paypal_subscription_id,custom_id:"00000000-0000-4000-8000-000000000001",status:"ACTIVE",plan_id:"P-OVERRIDE-BUSINESS"})};
-      if(name.endsWith("stripe-billing"))return {
-        getSubscription:async()=>({id:"sub_current",status:"active",customer:"cus_mock",metadata:{user_id:"00000000-0000-4000-8000-000000000001"},items:{data:[{price:{id:"price_pro"}}]}}),
-        tierFromPrice:id=>id==="price_pro"?"pro":id==="price_business"?"business":null,
-        verifiedPaidTier:()=>"pro",
-      };
-      throw Error("Unexpected import "+name);
-    },
-  });
-  const result=await exports.reconcileStripeSubscription("sub_current");
-  assert.equal(result.plan,"business");
-  assert.equal(saved.plan,"business");
+  assert.match(source,/applyVerifiedBillingState\(db/);
+  assert.doesNotMatch(source,/\.from\("profiles"\)[\s\S]*?\.update\(/);
+  assert.match(readFileSync("app/lib/billing-paypal.ts","utf8"),/applyVerifiedBillingState\(db/);
 });
 
 test("Stripe REST calls pin the version compatible with v3 embedded checkout",()=>{
@@ -112,10 +89,11 @@ test("Stripe REST calls pin the version compatible with v3 embedded checkout",()
 });
 
 // Execute the route with isolated provider and database substitutes: no network calls.
-function paypalRoute(profile,plan,{tier="pro",created=null}={}){
+function paypalRoute(profile,plan,{tier="pro",created=null,claim={}}={}){
   const source=readFileSync("app/api/paypal/checkout/route.ts","utf8");
   const calls=[];
-  const db={from(table){
+  const calls=[];
+  const db={rpc:async(name)=>name==="billing_claim_checkout"?{data:{decision:"create",attempt_id:"00000000-0000-4000-8000-000000000001",fence:1,idempotency_key:"alek-0123456789abcdef0123456789abcdef" ,...claim},error:null}:{data:true,error:null},from(table){
     const query={select(){return query;},eq(){return query;},async maybeSingle(){return {data:table==="profiles"?profile:null,error:null};}};
     return query;
   }};
@@ -125,7 +103,10 @@ function paypalRoute(profile,plan,{tier="pro",created=null}={}){
     require(name){
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription};
-      if(name.endsWith("billing-idempotency"))return {billingIdempotencyKey};
+      if(name.endsWith("billing-store"))return {
+        claimCheckout:async()=>({decision:"create",attempt_id:"00000000-0000-4000-8000-000000000001",fence:1,idempotency_key:"alek-0123456789abcdef0123456789abcdef",...claim}),
+        finishCheckout:async(...args)=>calls.push({finish:args}),
+      };
       if(name==="../_shared")return {
         admin:()=>db,userFrom:async()=>({id:"user"}),paypalBase:()=>"https://mock.invalid",paypalToken:async()=>"mock",
         subscription:async(id)=>({id,plan_id:"P-CONFIGURED",custom_id:"user"}),
@@ -158,7 +139,7 @@ test("PayPal checkout fails closed on mismatched prices instead of creating bill
   assert.match(route.calls[0].url,/\/v1\/billing\/plans\/P-CONFIGURED$/);
 });
 
-test("PayPal checkout uses a stable provider request ID for duplicate retries",async()=>{
+test("PayPal checkout uses the durable claim's provider request ID",async()=>{
   const validPlan={id:"P-CONFIGURED",status:"ACTIVE",billing_cycles:[{tenure_type:"REGULAR",frequency:{interval_unit:"MONTH",interval_count:1},pricing_scheme:{fixed_price:{currency_code:"EUR",value:"19.99"}}}]};
   const first=paypalRoute({role:"user"},validPlan);
   const second=paypalRoute({role:"user"},validPlan);
@@ -167,7 +148,7 @@ test("PayPal checkout uses a stable provider request ID for duplicate retries",a
   const firstRequest=first.calls.find(call=>call.options?.method==="POST");
   const secondRequest=second.calls.find(call=>call.options?.method==="POST");
   assert.equal(firstRequest.options.headers["PayPal-Request-Id"],secondRequest.options.headers["PayPal-Request-Id"]);
-  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],billingIdempotencyKey("paypal","checkout","user"));
+  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],"alek-0123456789abcdef0123456789abcdef");
   assert.ok(firstRequest.options.headers["PayPal-Request-Id"].length<=38);
   assert.equal(firstRequest.options.headers.Prefer,"return=representation");
   const createBody=JSON.parse(firstRequest.options.body);
@@ -175,18 +156,15 @@ test("PayPal checkout uses a stable provider request ID for duplicate retries",a
   assert.equal(createBody.custom_id,"user");
 });
 
-test("PayPal idempotent retry for a different tier returns conflict and no approval URL",async()=>{
+test("PayPal different-provider or tier checkout claim returns conflict before provider creation",async()=>{
   const businessPlan={id:"P-BUSINESS",status:"ACTIVE",billing_cycles:[{tenure_type:"REGULAR",frequency:{interval_unit:"MONTH",interval_count:1},pricing_scheme:{fixed_price:{currency_code:"EUR",value:"49.99"}}}]};
   const replay={id:"I-OLD12345678901",plan_id:"P-CONFIGURED",custom_id:"user",links:[{rel:"approve",href:"https://www.sandbox.paypal.com/checkoutnow?token=old"}]};
-  const route=paypalRoute({role:"user"},businessPlan,{tier:"business",created:replay});
+  const route=paypalRoute({role:"user"},businessPlan,{tier:"business",created:replay,claim:{decision:"conflict"}});
   const response=await route.post();
   assert.equal(response.status,409);
-  assert.match(response.body.error,/demande PayPal antérieure/);
-  assert.match(response.body.error,/Ne l’approuvez pas/);
   assert.equal("url" in response.body,false);
   const request=route.calls.find(call=>call.options?.method==="POST");
-  assert.equal(JSON.parse(request.options.body).plan_id,"P-BUSINESS");
-  assert.equal(request.options.headers["PayPal-Request-Id"],billingIdempotencyKey("paypal","checkout","user"));
+  assert.equal(request,undefined);
 });
 
 test("PayPal checkout fetches and verifies subscription when representation omits owner or plan",async()=>{
