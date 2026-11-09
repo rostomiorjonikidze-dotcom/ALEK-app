@@ -6,13 +6,37 @@ export type PriceLine = {
   hours: number;
 };
 
+export function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON * Math.abs(value)) * 100) / 100;
+}
+
+export function validPriceLine(item: PriceLine): boolean {
+  return Number.isFinite(item.price) && item.price >= 0
+    && Number.isFinite(item.quantity) && item.quantity > 0
+    && (item.priceType !== "hourly" || (Number.isFinite(item.hours) && item.hours > 0))
+    && ["total", "unit", "hourly"].includes(item.priceType)
+    && Number.isFinite(serviceTotal(item));
+}
+
+export function documentTotals(lines: PriceLine[], vatRate: number) {
+  const totalHT = roundMoney(lines.reduce((sum, item) => sum + serviceTotal(item), 0));
+  const totalVAT = roundMoney(totalHT * vatRate / 100);
+  return { totalHT, totalVAT, totalTTC: roundMoney(totalHT + totalVAT) };
+}
+
+export function validDocumentDates(issue: string, due: string): boolean {
+  const valid = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date)
+    && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+  return valid(issue) && valid(due) && due >= issue;
+}
+
 export function serviceTotal(item: PriceLine): number {
   const price = Number(item.price) || 0;
   const quantity = Number(item.quantity) || 0;
   const hours = Number(item.hours) || 0;
   const raw = item.priceType === "hourly" ? hours * price
     : item.priceType === "unit" ? quantity * price : price;
-  return Math.round((raw + Number.EPSILON) * 100) / 100;
+  return roundMoney(raw);
 }
 
 /**

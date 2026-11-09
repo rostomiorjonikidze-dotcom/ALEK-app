@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { admin, userFrom } from "../../paypal/_shared";
+import { receiptNumberOrNull } from "../../../lib/receipt-values";
 
 export const runtime = "nodejs";
 const categories = ["materiaux", "carburant", "transport", "outillage", "repas", "logiciels", "telecom", "loyer", "assurance", "autres"] as const;
 
-function numberOrNull(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100) / 100;
-  if (typeof value === "string") {
-    const n = Number(value.replace(/\s/g, "").replace(",", "."));
-    if (Number.isFinite(n)) return Math.round(n * 100) / 100;
-  }
-  return null;
-}
 export async function POST(request: Request) {
   try {
     const user = await userFrom(request);
@@ -55,7 +48,7 @@ export async function POST(request: Request) {
       const category = categories.includes(raw.category) ? raw.category : "autres";
       return NextResponse.json({ data: {
         merchant: String(raw.merchant || "").slice(0, 180), date: /^\d{4}-\d{2}-\d{2}$/.test(raw.date || "") ? raw.date : "",
-        total_ttc: numberOrNull(raw.total_ttc), total_ht: numberOrNull(raw.total_ht), vat: numberOrNull(raw.vat),
+        total_ttc: receiptNumberOrNull(raw.total_ttc), total_ht: receiptNumberOrNull(raw.total_ht), vat: receiptNumberOrNull(raw.vat),
         currency: /^[A-Z]{3}$/.test(raw.currency || "") ? raw.currency : "EUR",
         invoice_number: String(raw.invoice_number || "").slice(0, 80),
         description: String(raw.description || "").slice(0, 250), category,

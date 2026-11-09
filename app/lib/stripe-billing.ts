@@ -3,6 +3,7 @@ import "server-only";
 export type Tier = "pro" | "business";
 export const PLAN_CENTS: Record<Tier, number> = { pro: 1999, business: 4999 };
 export const PRICE_KEY: Record<Tier, string> = { pro: "STRIPE_PRO_PRICE_ID", business: "STRIPE_BUSINESS_PRICE_ID" };
+export const STRIPE_API_VERSION = "2025-02-24.acacia";
 export const STRIPE_ORIGIN = "https://api.stripe.com";
 
 export function stripeConfigured(): boolean {
@@ -28,6 +29,7 @@ export async function stripeRequest<T=Record<string, unknown>>(
     method:options.method||"GET",
     headers:{
       Authorization:"Bearer "+key,
+      "Stripe-Version":STRIPE_API_VERSION,
       ...(options.params?{"Content-Type":"application/x-www-form-urlencoded"}:{}),
       ...(options.idempotencyKey?{"Idempotency-Key":options.idempotencyKey}:{}),
     },
@@ -69,7 +71,7 @@ export async function getSubscription(id:string):Promise<StripeSubscription>{
   const key=process.env.STRIPE_SECRET_KEY;
   if (!key) throw Error("Stripe unavailable");
   const response=await fetch(STRIPE_ORIGIN+"/v1/subscriptions/"+id+"?"+params.toString(),{
-    headers:{Authorization:"Bearer "+key},cache:"no-store"
+    headers:{Authorization:"Bearer "+key,"Stripe-Version":STRIPE_API_VERSION},cache:"no-store"
   });
   if(!response.ok) throw Error("Subscription verification failed");
   return response.json() as Promise<StripeSubscription>;

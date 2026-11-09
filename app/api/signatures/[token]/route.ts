@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { admin } from "../../paypal/_shared";
+import { hasSignatureConsent, signatureLinkExpired } from "../../../lib/signature-validation";
 
 export const runtime = "nodejs";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -20,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { token } = await params;
   const row = await findRequest(token);
   if (!row) return NextResponse.json({ error: "Lien invalide." }, { status: 404 });
-  if (row.status === "pending" && Date.parse(row.expires_at) < Date.now()) return NextResponse.json({ error: "Ce lien a expiré." }, { status: 410 });
+  if (row.status === "pending" && signatureLinkExpired(row.expires_at)) return NextResponse.json({ error: "Ce lien a expiré." }, { status: 410 });
   if (row.snapshot_sha256 !== sha(stable(row.document_snapshot))) return NextResponse.json({ error: "Intégrité du document non vérifiée." }, { status: 409 });
   const d = row.document_snapshot;
   const doc = {
@@ -38,13 +39,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const row = await findRequest(token);
     if (!row) return NextResponse.json({ error: "Lien invalide." }, { status: 404 });
     if (row.status !== "pending") return NextResponse.json({ error: "Cette demande est déjà traitée." }, { status: 409 });
-    if (Date.parse(row.expires_at) < Date.now()) return NextResponse.json({ error: "Lien expiré." }, { status: 410 });
+    if (signatureLinkExpired(row.expires_at)) return NextResponse.json({ error: "Lien expiré." }, { status: 410 });
     if (row.snapshot_sha256 !== sha(stable(row.document_snapshot))) return NextResponse.json({ error: "Document modifié." }, { status: 409 });
     const body = await request.json();
     const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
     const signature = typeof body?.signature === "string" ? body.signature : "";
     const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(signature);
-    if (!body?.accept || name.length < 3 || !match || signature.length > 170_000 || signature.length < 500) {
+    if (!hasSignatureConsent(body?.accept) || name.length < 3 || !match || signature.length > 170_000 || signature.length < 500) {
       return NextResponse.json({ error: "Nom, consentement et signature manuscrite requis." }, { status: 400 });
     }
     const bytes = Buffer.from(match[1], "base64");
@@ -57,9 +58,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ipHash = ip ? createHmac("sha256", process.env.SUPABASE_SERVICE_ROLE_KEY || "unconfigured").update(ip).digest("hex") : null;
     const { data: updated, error } = await admin().from("artisan_signature_requests")
       .update({ status: "signed", signer_name: name, signer_signature_data: signature, signed_at: signedAt, signature_sha256: proof, signer_ip_hash: ipHash, signer_user_agent: (request.headers.get("user-agent") || "").slice(0, 300), consent_version: "simple-signature-v1" })
-      .eq("id", row.id).eq("status", "pending").select("id").maybeSingle();
+      .eq("id", row.id).eq("status", "pending").gt("expires_at", signedAt).select("id").maybeSingle();
     if (error) return NextResponse.json({ error: "Enregistrement impossible." }, { status: 503 });
-    if (!updated) return NextResponse.json({ error: "Cette demande a déjà été signée." }, { status: 409 });
+    if (!updated) return NextResponse.json({ error: "Cette demande a déjà été traitée ou a expiré." }, { status: 409 });
     return NextResponse.json({ status: "signed", signedAt, signatureHash: proof, snapshotHash: row.snapshot_sha256 }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Signature impossible." }, { status: 500 });
