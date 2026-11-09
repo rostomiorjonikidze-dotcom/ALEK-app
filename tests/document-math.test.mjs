@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates } from "../app/lib/document-math.ts";
+import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates, validISODate, validVatRate } from "../app/lib/document-math.ts";
 
 test("two contracts priced 1000 EUR each result in 2000 EUR HT", () => {
   const lines = inferUnitPrices("2 contrats à 1000 euros", [{
@@ -42,4 +42,12 @@ test("requires real, chronological document dates", () => {
   assert.equal(validDocumentDates("2026-02-30", "2026-03-30"), false);
   assert.equal(validDocumentDates("", "2026-03-30"), false);
   assert.equal(validDocumentDates("2026-03-30", "2026-03-29"), false);
+});
+
+test("validates VAT rates and ISO calendar dates at the boundary", () => {
+  assert.equal(validVatRate(0), true);
+  assert.equal(validVatRate(100), true);
+  for (const rate of [-0.01, 100.01, NaN, Infinity]) assert.equal(validVatRate(rate), false);
+  assert.equal(validISODate("2026-02-28"), true);
+  assert.equal(validISODate("2026-02-30"), false);
 });
