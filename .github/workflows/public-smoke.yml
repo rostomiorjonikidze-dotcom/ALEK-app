@@ -58,12 +58,12 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Install PostgreSQL 17 (matching ALEK production)
+      - name: Install isolated PostgreSQL server and client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-17 postgresql-client-17
-          /usr/lib/postgresql/17/bin/pg_config --version
-          echo "PG_BINDIR=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
+          sudo apt-get install -y postgresql postgresql-client
+          pg_config --version
+          pg_config --bindir
       - name: Test invoice protection, idempotency and concurrency on disposable database
         run: bash tests/database/invoices/run.sh
       - name: Test user isolation and Stripe/PayPal coordination on disposable database
