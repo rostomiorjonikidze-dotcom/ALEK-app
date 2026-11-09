@@ -93,7 +93,7 @@ BEGIN
       AND i.indkey[1] = (SELECT attnum FROM pg_attribute WHERE attrelid = v_table AND attname = 'document_type')
       AND i.indkey[2] = (SELECT attnum FROM pg_attribute WHERE attrelid = v_table AND attname = 'document_number')
       AND regexp_replace(pg_get_expr(i.indpred, i.indrelid), '[()[:space:]]', '', 'g')
-        = 'document_numberISNOTNULL'
+        IN ('document_numberISNOTNULL', 'user_idISNOTNULLANDdocument_numberISNOTNULL')
   ) INTO v_index_ok;
   IF NOT v_index_ok THEN
     RAISE EXCEPTION 'Expected existing unique partial index on (user_id, document_type, document_number) was not found';
@@ -154,25 +154,30 @@ BEGIN
   END IF;
   CREATE ROLE alek_invoice_issuer NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
 
+  -- PostgreSQL 17 automatically grants the CREATEROLE creator ADMIN membership.
+  -- Reject unexpected members and temporarily allow SET for ownership transfers.
   IF EXISTS (
     SELECT 1 FROM pg_auth_members m
-    WHERE m.roleid = 'alek_invoice_issuer'::regrole
+    WHERE (m.roleid = 'alek_invoice_issuer'::regrole
+           AND m.member <> (SELECT oid FROM pg_roles WHERE rolname = current_user))
        OR m.member = 'alek_invoice_issuer'::regrole
   ) THEN
-    RAISE EXCEPTION 'alek_invoice_issuer must have no role memberships';
+    RAISE EXCEPTION 'Unexpected alek_invoice_issuer role membership';
   END IF;
+  EXECUTE format(
+    'GRANT alek_invoice_issuer TO %I WITH INHERIT FALSE, SET TRUE', current_user
+  );
 
   -- The isolated NOLOGIN role owns only the two reviewed legacy functions and
   -- the new guarded entry point. It has no table-owner or RLS-bypass powers.
   GRANT USAGE ON SCHEMA public, auth TO alek_invoice_issuer;
+  -- CREATE is needed only until all function ownership transfers are finished.
   GRANT CREATE ON SCHEMA public TO alek_invoice_issuer;
-  ALTER FUNCTION public.issue_artisan_document(jsonb) OWNER TO alek_invoice_issuer;
-  ALTER FUNCTION public.issue_artisan_document_v2(jsonb) OWNER TO alek_invoice_issuer;
+  -- Alter SECURITY DEFINER configuration while the existing owner still owns it.
   ALTER FUNCTION public.issue_artisan_document(jsonb)
     SET search_path = pg_catalog, auth, public;
   ALTER FUNCTION public.issue_artisan_document_v2(jsonb)
     SET search_path = pg_catalog, auth, public;
-  REVOKE CREATE ON SCHEMA public FROM alek_invoice_issuer;
 
   -- Remove direct entry to both pre-existing RPCs from every login/API role.
   REVOKE ALL ON FUNCTION public.issue_artisan_document(jsonb) FROM PUBLIC;
@@ -184,7 +189,24 @@ BEGIN
     EXECUTE format('REVOKE ALL ON FUNCTION public.issue_artisan_document_v2(jsonb) FROM %I', v_existing_role.rolname);
   END LOOP;
 
-  GRANT SELECT, INSERT ON public.documents TO alek_invoice_issuer;
+  -- Explicit internal EXECUTE is needed: revoking the legacy RPC grants
+  -- also revokes the owner's implicit ACL entry after the owner transition.
+  -- Only the isolated NOLOGIN issuer may chain v3 → v2 → v1.
+  GRANT EXECUTE ON FUNCTION public.issue_artisan_document(jsonb) TO alek_invoice_issuer;
+  GRANT EXECUTE ON FUNCTION public.issue_artisan_document_v2(jsonb) TO alek_invoice_issuer;
+
+  -- Finish ACL changes before moving ownership away from the migration role.
+  ALTER FUNCTION public.issue_artisan_document(jsonb) OWNER TO alek_invoice_issuer;
+  ALTER FUNCTION public.issue_artisan_document_v2(jsonb) OWNER TO alek_invoice_issuer;
+
+  -- The v2 wrapper updates VAT/professional flags after its initial INSERT.
+  GRANT SELECT, INSERT, UPDATE ON public.documents TO alek_invoice_issuer;
+  -- The legacy allocator reads and upserts counters, which have RLS but
+  -- no authenticated policies. Grant only this isolated NOLOGIN issuer.
+  GRANT SELECT, INSERT, UPDATE ON public.artisan_document_counters TO alek_invoice_issuer;
+  CREATE POLICY alek_invoice_issuer_counters
+    ON public.artisan_document_counters FOR ALL TO alek_invoice_issuer
+    USING (true) WITH CHECK (true);
   GRANT EXECUTE ON FUNCTION auth.uid() TO alek_invoice_issuer;
   v_sequence := pg_get_serial_sequence('public.documents', 'id');
   IF v_sequence IS NOT NULL THEN
@@ -228,6 +250,15 @@ BEGIN
   END IF;
 
   IF OLD.document_type = 'facture' AND OLD.document_number IS NOT NULL THEN
+    -- The legacy v2 issuer follows its INSERT with an internal UPDATE
+    -- of these two persisted flags. Callers cannot invoke v2 directly.
+    IF current_user = 'alek_invoice_issuer'
+       AND (to_jsonb(NEW) - 'invoice_status' - 'vat_exempt' - 'client_is_professional')
+           IS NOT DISTINCT FROM
+           (to_jsonb(OLD) - 'invoice_status' - 'vat_exempt' - 'client_is_professional')
+    THEN
+      RETURN NEW;
+    END IF;
     IF (to_jsonb(NEW) - 'invoice_status') IS DISTINCT FROM
        (to_jsonb(OLD) - 'invoice_status') THEN
       RAISE EXCEPTION 'Les données fiscales d’une facture numérotée sont immuables';
@@ -279,8 +310,8 @@ AS $function$
     * 100 + 0.5
   ) / 100
 $function$;
-ALTER FUNCTION public.alek_round_document_money(numeric) OWNER TO alek_invoice_issuer;
 REVOKE ALL ON FUNCTION public.alek_round_document_money(numeric) FROM PUBLIC;
+ALTER FUNCTION public.alek_round_document_money(numeric) OWNER TO alek_invoice_issuer;
 
 CREATE FUNCTION public.issue_artisan_document_v3(p_payload jsonb)
 RETURNS jsonb
@@ -510,6 +541,16 @@ BEGIN
 END;
 $function$;
 
-ALTER FUNCTION public.issue_artisan_document_v3(jsonb) OWNER TO alek_invoice_issuer;
 REVOKE ALL ON FUNCTION public.issue_artisan_document_v3(jsonb) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION public.issue_artisan_document_v3(jsonb) TO authenticated;
+ALTER FUNCTION public.issue_artisan_document_v3(jsonb) OWNER TO alek_invoice_issuer;
+-- The issuer must not retain object-creation rights after installation.
+REVOKE CREATE ON SCHEMA public FROM alek_invoice_issuer;
+-- Preserve the migration role's ADMIN membership without SET/INHERIT.
+DO $finalize_role$
+BEGIN
+  EXECUTE format(
+    'GRANT alek_invoice_issuer TO %I WITH INHERIT FALSE, SET FALSE', current_user
+  );
+END
+$finalize_role$;

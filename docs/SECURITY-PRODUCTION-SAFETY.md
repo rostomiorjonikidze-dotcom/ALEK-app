@@ -22,7 +22,7 @@ storage schema is not present here.
 
 ## Prepared profile guard
 
-`supabase/migrations/2026110903_profiles_protect_billing_fields.sql` is an
+`supabase/migrations/20261109030000_profiles_protect_billing_fields.sql` is an
 unapplied, reversible migration. It fails if `public.profiles`, `role`, or
 `plan` is missing. It adds a row trigger, without replacing RLS policies or
 changing table grants. Authenticated profile edits to business information
