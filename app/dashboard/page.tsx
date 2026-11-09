@@ -786,6 +786,7 @@ export default function Home() {
         await navigator.locks.request(`alek-issuance:${user.id}`, async () => {
           if (draftUserIdRef.current !== user.id) throw new IssuanceError("Le compte a changé. Rechargez la page.");
           const previous = readIssueIntent(localStorage, user.id);
+          setPendingIssue(Boolean(previous && !previous.result));
           if (retryPending && !previous) throw new IssuanceError("Aucune émission en attente. Consultez l’historique.");
           const intent = retryPending && previous ? previous : beginIssue(localStorage, user.id, payload);
           setPendingIssue(!intent.result);

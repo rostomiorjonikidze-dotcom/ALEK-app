@@ -1,5 +1,5 @@
 import { hasBlockingStripeSubscription } from "../../../lib/payment-policy";
-import { billingIdempotencyKey } from "../../../lib/billing-idempotency";
+import { claimCheckout, finishCheckout, finishProviderCheckout } from "../../../lib/billing-store";
 import { NextResponse } from "next/server";
 import { admin, paypalBase, paypalToken, subscription, userFrom } from "../_shared";
 
@@ -22,7 +22,7 @@ function matchesPrice(plan: PaypalPlan, expected: string): boolean {
   const fixed = regular?.pricing_scheme?.fixed_price;
   return plan.status === "ACTIVE"
     && regular?.frequency?.interval_unit === "MONTH"
-    && Number(regular?.frequency?.interval_count ?? 1) === 1
+    && Number(regular?.frequency?.interval_count) === 1
     && fixed?.currency_code === "EUR"
     && Number.isFinite(Number(fixed?.value))
     && Math.abs(Number(fixed?.value) - Number(expected)) < 0.001;
@@ -81,13 +81,38 @@ export async function POST(request: Request) {
       }
     }
 
-    const response = await fetch(paypalBase() + "/v1/billing/subscriptions", {
+    const claim = await claimCheckout(db, user.id, "paypal", tier);
+    if (claim.decision === "busy") return NextResponse.json({ error: "Une demande d’abonnement est déjà en cours. Réessayez dans un instant." }, { status: 409 });
+    if (claim.decision === "entitled") return NextResponse.json({ error: "Un accès payant est déjà actif. Aucun nouvel abonnement n’a été créé." }, { status: 409 });
+    if (claim.decision === "conflict") return NextResponse.json({ error: "Une autre demande d’abonnement est en attente. Terminez-la ou contactez le support avant de réessayer." }, { status: 409 });
+    if (claim.decision === "manual_review") return NextResponse.json({ error: "Une demande précédente doit être vérifiée par le support avant toute nouvelle tentative. Aucun autre paiement n’a été lancé." }, { status: 409 });
+    if (claim.decision === "reuse") {
+      if (!claim.approval_url || !claim.provider_resource_id) return NextResponse.json({ error: "Une demande PayPal existe déjà mais doit être vérifiée par le support." }, { status: 409 });
+      const existing = await subscription(claim.provider_resource_id);
+      if (existing.id !== claim.provider_resource_id || existing.custom_id !== user.id)
+        return NextResponse.json({ error: "Impossible de vérifier la demande PayPal existante." }, { status: 503 });
+      if (["CANCELLED", "EXPIRED"].includes(String(existing.status || "").toUpperCase())) {
+        await finishProviderCheckout(db, "paypal", claim.provider_resource_id, "failed");
+        return NextResponse.json({ error: "La demande PayPal précédente est terminée. Réessayez pour créer une nouvelle demande." }, { status: 409 });
+      }
+      if (String(existing.status || "").toUpperCase() !== "APPROVAL_PENDING")
+        return NextResponse.json({ error: "La demande PayPal est en cours de vérification. Aucun nouvel abonnement n’a été créé." }, { status: 409 });
+      const expectedOrigin = env === "live" ? "https://www.paypal.com/" : "https://www.sandbox.paypal.com/";
+      if (!claim.approval_url.startsWith(expectedOrigin)) return NextResponse.json({ error: "Lien PayPal existant non vérifiable." }, { status: 503 });
+      return NextResponse.json({ url: claim.approval_url }, { headers: { "Cache-Control": "no-store" } });
+    }
+    if (!claim.attempt_id || typeof claim.fence !== "number" || !claim.idempotency_key)
+      throw Error("Invalid checkout claim");
+
+    let response: Response;
+    try {
+      response = await fetch(paypalBase() + "/v1/billing/subscriptions", {
       method: "POST", cache: "no-store",
       headers: {
         Authorization: "Bearer " + token,
         "Content-Type": "application/json",
         Prefer: "return=representation",
-        "PayPal-Request-Id": billingIdempotencyKey("paypal", "checkout", user.id),
+        "PayPal-Request-Id": claim.idempotency_key,
       },
       body: JSON.stringify({
         plan_id: planId, custom_id: user.id,
@@ -97,9 +122,16 @@ export async function POST(request: Request) {
           cancel_url: "https://app.alek.best/pricing?paypal=cancel",
         },
       }),
-    });
-    const result = await response.json();
-    if (!response.ok) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
+      });
+    } catch (error) {
+      await finishCheckout(db, claim.attempt_id, claim.fence, "unknown");
+      throw error;
+    }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      await finishCheckout(db, claim.attempt_id, claim.fence, response.status < 500 ? "failed" : "unknown");
+      return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
+    }
     if (typeof result?.id !== "string" || !/^I-[A-Z0-9]{8,30}$/i.test(result.id))
       return NextResponse.json({ error: "Impossible de vérifier la demande PayPal." }, { status: 502 });
     let confirmed = result;
@@ -113,8 +145,12 @@ export async function POST(request: Request) {
     }
     const url = result?.links?.find((link: { rel: string; href: string }) => link.rel === "approve")?.href as string | undefined;
     const valid = url && (url.startsWith("https://www.paypal.com/") || url.startsWith("https://www.sandbox.paypal.com/"));
-    if (!valid) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
-    return NextResponse.json({ url });
+    if (!valid) {
+      await finishCheckout(db, claim.attempt_id, claim.fence, "pending", result.id);
+      return NextResponse.json({ error: "La demande PayPal a été créée mais son lien doit être vérifié par le support." }, { status: 502 });
+    }
+    await finishCheckout(db, claim.attempt_id, claim.fence, "pending", result.id, url);
+    return NextResponse.json({ url }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "Le service de paiement est temporairement indisponible." }, { status: 503 });
   }

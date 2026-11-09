@@ -1,5 +1,5 @@
 import {hasBlockingStripeSubscription} from "../../../lib/payment-policy";
-import {billingIdempotencyKey} from "../../../lib/billing-idempotency";
+import {claimCheckout,finishCheckout,finishProviderCheckout} from "../../../lib/billing-store";
 import {NextResponse} from "next/server";
 import {admin,userFrom} from "../../paypal/_shared";
 import {stripeConfigured,stripeRequest,validatedPrice,PLAN_CENTS,type Tier} from "../../../lib/stripe-billing";
@@ -43,15 +43,37 @@ export async function POST(request:Request){
     }else if(user.email){
       params.set("customer_email",user.email);
     }
-    const session=await stripeRequest<{id?:string;client_secret?:string;amount_total?:number;mode?:string;url?:string}>(
-      "/v1/checkout/sessions",{
-        method:"POST",
-        params,
-        idempotencyKey:billingIdempotencyKey("stripe","checkout",user.id),
-      });
+    const claim=await claimCheckout(db,user.id,"stripe",tier);
+    if(claim.decision==="busy")return NextResponse.json({error:"Une demande de paiement est déjà en cours. Réessayez dans un instant."},{status:409});
+    if(claim.decision==="entitled")return NextResponse.json({error:"Un accès payant est déjà actif. Aucun nouvel abonnement n’a été créé."},{status:409});
+    if(claim.decision==="conflict")return NextResponse.json({error:"Une autre demande d’abonnement est en attente. Terminez-la ou contactez le support avant de réessayer."},{status:409});
+    if(claim.decision==="manual_review")return NextResponse.json({error:"Une demande précédente doit être vérifiée par le support avant toute nouvelle tentative. Aucun autre paiement n’a été lancé."},{status:409});
+    if(claim.decision==="reuse"&&claim.provider_resource_id){
+      const existing=await stripeRequest<{id?:string;client_secret?:string;mode?:string;client_reference_id?:string;status?:string}>(
+        "/v1/checkout/sessions/"+claim.provider_resource_id);
+      if(existing.id!==claim.provider_resource_id||existing.client_reference_id!==user.id||existing.mode!=="subscription")
+        return NextResponse.json({error:"Impossible de vérifier la demande de paiement existante."},{status:503});
+      if(existing.status==="expired"){
+        await finishProviderCheckout(db,"stripe",claim.provider_resource_id,"failed");
+        return NextResponse.json({error:"La session précédente a expiré. Réessayez pour créer une nouvelle demande."},{status:409});
+      }
+      if(!existing.client_secret)return NextResponse.json({error:"Session de paiement en cours de vérification."},{status:503});
+      return NextResponse.json({clientSecret:existing.client_secret,sessionId:existing.id},{headers:{"Cache-Control":"no-store"}});
+    }
+    if(!claim.attempt_id||typeof claim.fence!=="number"||!claim.idempotency_key)
+      throw Error("Invalid checkout claim");
+    let session:{id?:string;client_secret?:string;amount_total?:number;mode?:string};
+    try{
+      session=await stripeRequest<{id?:string;client_secret?:string;amount_total?:number;mode?:string}>(
+        "/v1/checkout/sessions",{method:"POST",params,idempotencyKey:claim.idempotency_key});
+    }catch(error){
+      await finishCheckout(db,claim.attempt_id,claim.fence,"unknown");
+      throw error;
+    }
     if(!session.client_secret || !session.id || session.mode!=="subscription"
       || (session.amount_total!==null && session.amount_total!==undefined && session.amount_total!==PLAN_CENTS[tier]))
       return NextResponse.json({error:"Impossible de vérifier les détails de l'abonnement."},{status:502});
+    await finishCheckout(db,claim.attempt_id,claim.fence,"pending",session.id);
     return NextResponse.json({
       clientSecret:session.client_secret,
       sessionId:session.id,
