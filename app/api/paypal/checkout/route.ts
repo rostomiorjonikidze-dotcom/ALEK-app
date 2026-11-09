@@ -1,4 +1,5 @@
 import { hasBlockingStripeSubscription } from "../../../lib/payment-policy";
+import { billingIdempotencyKey } from "../../../lib/billing-idempotency";
 import { NextResponse } from "next/server";
 import { admin, paypalBase, paypalToken, userFrom } from "../_shared";
 
@@ -82,7 +83,11 @@ export async function POST(request: Request) {
 
     const response = await fetch(paypalBase() + "/v1/billing/subscriptions", {
       method: "POST", cache: "no-store",
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "PayPal-Request-Id": crypto.randomUUID() },
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        "PayPal-Request-Id": billingIdempotencyKey("paypal", "checkout", user.id),
+      },
       body: JSON.stringify({
         plan_id: planId, custom_id: user.id,
         application_context: {

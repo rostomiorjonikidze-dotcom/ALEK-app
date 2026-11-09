@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "../../lib/request-body";
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { createClient } from "@supabase/supabase-js";
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     reservedUserId = user.id;
 
-    const body = await request.json();
+    const body = await readJsonObject(request, 64_000);
     const userText = String(body?.text || body?.description || "").trim();
     const language = String(
       body?.inputLanguage || body?.language || "fr",
@@ -239,6 +240,7 @@ Transforme ce texte en contenu professionnel pour devis/facture.
       role: reserved.role || "user",
     });
   } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("AI route error:", error);
 
     if (admin && reservedUserId && usageWasReserved) {

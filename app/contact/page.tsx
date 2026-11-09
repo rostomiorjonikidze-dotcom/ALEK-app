@@ -4,8 +4,9 @@ import { LEGAL } from "../legal-config";
 
 export default function ContactPage() {
   return (
-    <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
+    <>
       <SiteHeader />
+      <main id="contenu-principal" tabIndex={-1} className="alek-public-page min-h-screen scroll-mt-24 bg-[#f3f6fc] text-[#14213b]">
       <section className="relative overflow-hidden bg-gradient-to-br from-[#071a35] via-[#12396f] to-[#1c59ac] px-5 py-20 text-white sm:py-28">
         <div className="pointer-events-none absolute -right-20 -top-20 size-80 rounded-full bg-blue-600/20 blur-3xl" />
         <div className="relative mx-auto max-w-6xl"><span className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-blue-200">Assistance ALEK Artisan</span><h1 className="mt-7 text-4xl font-black tracking-tight sm:text-6xl">Comment pouvons-nous vous aider ?</h1><p className="mt-5 max-w-2xl text-lg leading-8 text-slate-300">Une question sur votre compte, vos documents, votre abonnement ou la confidentialité de vos données ? Notre contact est à votre disposition.</p></div>
@@ -15,6 +16,7 @@ export default function ContactPage() {
         <aside className="rounded-[30px] border border-[#dce6f5] bg-white p-8 shadow-[0_20px_60px_rgba(15,42,85,.09)] sm:p-10"><h2 className="text-2xl font-black">Liens utiles</h2><p className="mt-3 text-sm leading-6 text-slate-600">Retrouvez rapidement les informations importantes.</p><div className="mt-7 grid gap-3">{[{href:"/login",label:"Accéder à mon espace",description:"Vos devis, factures et informations"},{href:"/pricing",label:"Consulter les tarifs",description:"Comparer les offres ALEK"},{href:"/privacy",label:"Confidentialité",description:"Utilisation et protection des données"},{href:"/terms",label:"Conditions d’utilisation",description:"Règles d’utilisation du service"}].map(item=><Link key={item.href} href={item.href} className="group rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50"><strong className="flex justify-between text-sm text-[#14213b]">{item.label}<span className="text-blue-600">↗</span></strong><span className="mt-1 block text-xs text-slate-500">{item.description}</span></Link>)}</div></aside>
       </section>
       <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 border-t border-slate-200 px-5 py-8 text-sm text-slate-500"><span>© 2026 ALEK Artisan</span><div className="flex gap-5"><Link href="/mentions-legales" className="hover:text-blue-700">Mentions légales</Link><Link href="/refund" className="hover:text-blue-700">Remboursements</Link></div></footer>
-    </main>
+      </main>
+    </>
   );
 }

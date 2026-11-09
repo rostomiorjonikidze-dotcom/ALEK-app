@@ -27,7 +27,7 @@ export async function POST(request:Request) {
   if(matchedPlan!=="pro" && matchedPlan!=="business")
     return NextResponse.json({error:"Formule d’abonnement non reconnue."},{status:403});
   const status=String(details.status || "").toUpperCase();
-  const plan=status==="ACTIVE"?(fallback==="business"?fallback:matchedPlan):fallback;
+  const plan=status==="ACTIVE"?(fallback!=="free"?fallback:matchedPlan):fallback;
   // Never replace a different active subscription with a pending one.
   if(requested && profile.paypal_subscription_id && profile.paypal_subscription_id!==requested) {
    const existing=await subscription(profile.paypal_subscription_id);
