@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import SiteHeader from "../components/SiteHeader";
 import { supabase } from "../lib/supabase";
 import { buildTemplate, checkCompliance, paymentClauses, reminder, type ClientKind, type ComplianceInput, type TemplateKind } from "../lib/pro-compliance";
+import { userFacingError } from "../lib/user-facing-error";
 
 type Doc = {
   id:string; document_type:"devis"|"facture"; document_number:string; document_date:string;
@@ -17,6 +18,7 @@ type Doc = {
 type Expense = { id:string; merchant:string; document_date:string|null; total_ttc:number; total_ht:number|null; vat_amount:number|null; category:string; description:string|null; invoice_number:string|null; currency:string };
 type Scan = { merchant:string; date:string; total_ttc:number|null; total_ht:number|null; vat:number|null; category:string; description:string; invoice_number:string; currency:string; confidence:number };
 type Tab = "scanner"|"conformite"|"modeles"|"relances"|"signature";
+type AccessState = "loading"|"ready"|"auth-error";
 const categories = [["materiaux","Matériaux"],["carburant","Carburant"],["transport","Transport"],["outillage","Outillage"],["repas","Repas"],["logiciels","Logiciels"],["telecom","Télécommunications"],["loyer","Loyer"],["assurance","Assurance"],["autres","Autres"]];
 const tabs: {key:Tab;icon:string;name:string}[] = [
   {key:"scanner",icon:"◈",name:"Scanner des reçus"},{key:"conformite",icon:"✓",name:"Conformité"},{key:"modeles",icon:"▤",name:"Modèles français"},{key:"relances",icon:"✉",name:"Relances clients"},{key:"signature",icon:"✎",name:"Signature du devis"}
@@ -35,6 +37,7 @@ export default function ProToolsPage(){
   const [expenses,setExpenses]=useState<Expense[]>([]);
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
+  const [access,setAccess]=useState<AccessState>("loading");
   const [scan,setScan]=useState<Scan|null>(null);
   const [scanFile,setScanFile]=useState<File|null>(null);
   const [selected,setSelected]=useState("");
@@ -51,18 +54,25 @@ export default function ProToolsPage(){
   useEffect(()=>{
     let active=true;
     void (async()=>{
-      const {data:{user}}=await supabase.auth.getUser();
-      if(!active)return;
-      if(!user){router.push("/login");return;}
-      setUserId(user.id);
-      const [d,e]=await Promise.all([
-        supabase.from("documents").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(100),
-        supabase.from("artisan_expenses").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(50)
-      ]);
-      if(!active)return;
-      if(d.error)setMessage("Impossible de charger les documents.");
-      else {setDocuments(d.data||[]); if(d.data?.length)setSelected(d.data[0].id);}
-      if(!e.error)setExpenses(e.data||[]);
+      try {
+        const {data,error}=await supabase.auth.getUser();
+        if(!active)return;
+        if(error){setMessage(userFacingError("auth"));setAccess("auth-error");return;}
+        if(!data.user){router.push("/login");return;}
+        setUserId(data.user.id);
+        const [d,e]=await Promise.all([
+          supabase.from("documents").select("*").eq("user_id",data.user.id).order("created_at",{ascending:false}).limit(100),
+          supabase.from("artisan_expenses").select("*").eq("user_id",data.user.id).order("created_at",{ascending:false}).limit(50)
+        ]);
+        if(!active)return;
+        if(d.error)setMessage(userFacingError("load"));
+        else {setDocuments(d.data||[]); if(d.data?.length)setSelected(d.data[0].id);}
+        if(e.error)setMessage(userFacingError("load"));
+        else setExpenses(e.data||[]);
+        setAccess("ready");
+      } catch {
+        if(active){setMessage(userFacingError("auth"));setAccess("auth-error");}
+      }
     })();
     return()=>{active=false;};
   },[router]);
@@ -94,14 +104,15 @@ export default function ProToolsPage(){
         const reader=new FileReader();
         reader.onload=()=>resolve(String(reader.result||""));reader.onerror=()=>reject(Error("Fichier illisible"));reader.readAsDataURL(scanFile);
       });
-      const {data:{session}}=await supabase.auth.getSession();
-      if(!session)throw Error("Session expirée.");
+      const {data:{session},error:authError}=await supabase.auth.getSession();
+      if(authError||!session){setMessage(userFacingError("auth"));return;}
       const response=await fetch("/api/receipts/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify({image:fileData})});
+      if(!response.ok){setMessage(response.status===401?userFacingError("auth"):userFacingError("scan"));return;}
       const body=await response.json();
-      if(!response.ok)throw Error(body.error||"Analyse impossible.");
+      if(!body.data){setMessage(userFacingError("scan"));return;}
       setScan(body.data);
       setMessage("Extraction terminée. Vérifiez chaque champ avant de sauvegarder.");
-    }catch(e){setMessage(e instanceof Error?e.message:"Erreur d'analyse.");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("scan"));}finally{setBusy(false);}
   }
   async function saveExpense(){
     if(!userId||!scan||scan.total_ttc===null||!Number.isFinite(scan.total_ttc)||scan.total_ttc<0){setMessage("Le montant TTC doit être vérifié et renseigné.");return;}
@@ -113,10 +124,10 @@ export default function ProToolsPage(){
         vat_amount:scan.vat,category:scan.category,description:scan.description||null,
         invoice_number:scan.invoice_number||null,currency:scan.currency||"EUR",source:"ocr_verified",
       }).select("*").single();
-      if(error)throw Error(error.message);
+      if(error){setMessage(userFacingError("save"));return;}
       setExpenses(prev=>[data,...prev]);setScan(null);setScanFile(null);
       setMessage("Dépense enregistrée. La photo d'origine n'a pas été conservée.");
-    }catch(e){setMessage(e instanceof Error?e.message:"Enregistrement impossible.");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("save"));}finally{setBusy(false);}
   }
   function editScan(field:keyof Scan,value:string){
     setScan(prev=>prev?{...prev,[field]:["total_ttc","total_ht","vat","confidence"].includes(field)?(value===""?null:Number(value)):value}:prev);
@@ -126,24 +137,31 @@ export default function ProToolsPage(){
     setTemplateInfo({provider:selectedDoc.business_name||"",providerAddress:selectedDoc.business_address||"",providerSiret:selectedDoc.business_siret||"",client:selectedDoc.client_name||"",clientAddress:selectedDoc.client_address||"",description:selectedDoc.description||selectedDoc.services?.map(s=>s.description).join("; ")||"",amount:money(selectedDoc.total_ttc)+" TTC",deadline:selectedDoc.due_date||""});
   }
   async function refreshSignatures(){
-    try { const {data:{session}}=await supabase.auth.getSession(); if(!session)return;
+    try { const {data:{session},error}=await supabase.auth.getSession(); if(error||!session){setMessage(userFacingError("auth"));return;}
       const res=await fetch("/api/signatures",{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"});
-      if(res.ok){const body=await res.json();setSignatureRequests(body.requests||[]);}
-    } catch {/* Liste facultative, pas de blocage de la création de devis. */}
+      if(!res.ok){setMessage(res.status===401?userFacingError("auth"):userFacingError("signature"));return;}
+      const body=await res.json();setSignatureRequests(body.requests||[]);
+    } catch {setMessage(userFacingError("signature"));}
   }
   async function createSignatureLink(){
     if(!selectedDoc||selectedDoc.document_type!=="devis")return;
     setBusy(true);setMessage("");setSignatureLink("");
     try {
-      const {data:{session}}=await supabase.auth.getSession();
-      if(!session)throw Error("Veuillez vous reconnecter.");
+      const {data:{session},error:authError}=await supabase.auth.getSession();
+      if(authError||!session){setMessage(userFacingError("auth"));return;}
       const response=await fetch("/api/signatures",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+session.access_token},body:JSON.stringify({documentId:selectedDoc.id})});
-      const body=await response.json();if(!response.ok)throw Error(body.error||"Création impossible");
+      if(!response.ok){setMessage(response.status===401?userFacingError("auth"):userFacingError("signature"));return;}
+      const body=await response.json();if(typeof body.url!=="string"){setMessage(userFacingError("signature"));return;}
       setSignatureLink(body.url);setMessage("Lien créé, valable 14 jours. Envoyez-le seulement au destinataire prévu.");await refreshSignatures();
-    }catch(e){setMessage(e instanceof Error?e.message:"Création impossible");}finally{setBusy(false);}
+    }catch{setMessage(userFacingError("signature"));}finally{setBusy(false);}
   }
   const docSelector=<select className={inputClass} value={selected} onChange={e=>{setSelected(e.target.value);setSignatureLink("");}}><option value="">Choisir un document enregistré</option>{documents.map(doc=><option key={doc.id} value={doc.id}>{doc.document_type==="devis"?"Devis":"Facture"} {doc.document_number||"sans numéro"} · {doc.client_name||"Sans client"}</option>)}</select>;
-  return <main className="min-h-screen bg-[#f3f6fc] text-[#14213b]"><SiteHeader/>
+  async function copyText(value:string){
+    try {await navigator.clipboard.writeText(value);setMessage("Texte copié dans le presse-papiers.");}
+    catch {setMessage("La copie a échoué. Sélectionnez le texte puis copiez-le manuellement.");}
+  }
+  if(access!=="ready")return <><SiteHeader/><main id="contenu-principal" tabIndex={-1} className="min-h-screen scroll-mt-24 bg-[#f3f6fc] px-5 py-12 text-[#14213b]"><div className="mx-auto max-w-3xl"><h1 className="text-3xl font-black">Outils professionnels</h1>{access==="loading"?<p role="status" className="mt-5">Vérification de votre session et chargement…</p>:<div className="mt-5 rounded-xl border border-blue-200 bg-white p-5"><p role="alert">{message||userFacingError("auth")}</p><Link href="/login" className="mt-3 inline-block font-semibold text-blue-700 underline">Se connecter</Link></div>}</div></main></>;
+  return <><SiteHeader/><main id="contenu-principal" tabIndex={-1} className="min-h-screen scroll-mt-24 bg-[#f3f6fc] text-[#14213b]">
     <section className="bg-gradient-to-br from-[#06162e] via-[#143770] to-[#1d57ad] px-5 py-14 text-white"><div className="mx-auto max-w-7xl"><p className="text-sm font-bold uppercase tracking-[.2em] text-blue-200">ALEK ARTISAN · OUTILS PROFESSIONNELS</p><h1 className="mt-4 text-4xl font-black sm:text-5xl">Gérez vos documents en confiance.</h1><p className="mt-4 max-w-3xl text-blue-100">OCR des dépenses, contrôle des mentions, documents français, relances et devis à signer. Vos décisions restent sous votre contrôle.</p><Link href="/dashboard" className="mt-7 inline-flex rounded-xl bg-white px-5 py-3 text-sm font-bold text-[#143770]">← Retour à mes devis et factures</Link></div></section>
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5" role="tablist" aria-label="Outils professionnels">{tabs.map(t=><button key={t.key} role="tab" aria-selected={tab===t.key} onClick={()=>{setTab(t.key);setMessage("");if(t.key==="signature")void refreshSignatures();}} className={"rounded-2xl border px-4 py-4 text-left text-sm font-bold shadow-sm transition "+(tab===t.key?"border-blue-700 bg-blue-700 text-white":"border-blue-100 bg-white text-blue-900 hover:border-blue-400")}><span className="mr-2 text-lg">{t.icon}</span>{t.name}</button>)}</div>
@@ -166,20 +184,20 @@ export default function ProToolsPage(){
         <article className="rounded-3xl bg-white p-6 shadow-sm sm:p-8"><h2 className="text-2xl font-black">Registre de dépenses</h2><p className="mt-3 text-sm text-slate-600">Historique privé. Vérifiez la récupération et la déductibilité de TVA avec votre comptable.</p><div className="mt-5 text-3xl font-black text-blue-700">{money(expenses.reduce((sum,item)=>sum+Number(item.total_ttc||0),0))}</div><p className="text-xs text-slate-500">Total TTC des {expenses.length} dernières dépenses chargées</p><div className="mt-6 space-y-3">{expenses.length===0?<p className="text-sm text-slate-400">Aucune dépense enregistrée.</p>:expenses.map(e=><div key={e.id} className="rounded-xl border border-slate-100 p-4"><div className="flex justify-between gap-3"><strong>{e.merchant}</strong><strong>{money(e.total_ttc)}</strong></div><p className="mt-1 text-xs text-slate-500">{e.document_date||"Date inconnue"} · {categories.find(c=>c[0]===e.category)?.[1]||e.category} · {e.invoice_number||"Sans référence"}</p></div>)}</div></article>
       </section>}
       {tab==="conformite"&&<section className="grid gap-6 lg:grid-cols-[.7fr_1.3fr]"><article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Contrôle des mentions</h2><p className="text-sm text-slate-600">Choisissez un document : les champs connus sont contrôlés automatiquement.</p>{docSelector}<Field title="Type de client"><select className={inputClass} value={clientKind} onChange={e=>setClientKind(e.target.value as ClientKind)}><option value="professionnel">Professionnel (B2B)</option><option value="particulier">Particulier (B2C)</option></select></Field><Field title="SIREN du client professionnel"><input className={inputClass} value={clientSiren} onChange={e=>setClientSiren(e.target.value.replace(/\D/g,"").slice(0,9))} placeholder="9 chiffres"/></Field><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={vatExempt} onChange={e=>setVatExempt(e.target.checked)}/> Franchise en base de TVA (à confirmer)</label><Field title="Secteur"><select className={inputClass} value={sector} onChange={e=>setSector(e.target.value)}><option value="">Général</option><option value="batiment">Bâtiment / artisanat</option></select></Field><p className="text-xs text-slate-500">Contrôle indicatif : ne couvre pas toutes les activités, taux de TVA, garanties et cas particuliers.</p></article>
-        <article className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Résultats</h2>{!selectedDoc?<p className="mt-5 text-slate-500">Enregistrez d&apos;abord un devis ou une facture dans votre espace.</p>:<><p className="mt-2 text-sm text-slate-600">{selectedDoc.document_number||"Document"} · {checks.filter(f=>f.level==="important").length} point(s) important(s), {checks.filter(f=>f.level==="attention").length} vérification(s).</p><div className="mt-5 space-y-3">{checks.length?checks.map((f,i)=><div className={"rounded-xl border p-4 "+(f.level==="important"?"border-red-100 bg-red-50":"border-amber-100 bg-amber-50")} key={i}><p className="text-sm font-semibold">{f.level==="important"?"À corriger : ":"À vérifier : "}{f.message}</p><a className="mt-2 inline-block text-xs font-bold text-blue-700 underline" href={f.reference} target="_blank" rel="noreferrer">Source officielle</a></div>):<p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Aucun élément détecté par ce contrôle limité. Cela ne constitue pas une certification légale.</p>}</div><div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong>Clauses suggérées (à adapter)</strong><pre className="mt-3 whitespace-pre-wrap font-sans text-sm">{paymentClauses(clientKind,30,vatExempt).join("\n")}</pre><button className={secondary} onClick={()=>void navigator.clipboard.writeText(paymentClauses(clientKind,30,vatExempt).join("\n"))}>Copier les clauses</button></div></>}</article>
+        <article className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Résultats</h2>{!selectedDoc?<p className="mt-5 text-slate-500">Enregistrez d&apos;abord un devis ou une facture dans votre espace.</p>:<><p className="mt-2 text-sm text-slate-600">{selectedDoc.document_number||"Document"} · {checks.filter(f=>f.level==="important").length} point(s) important(s), {checks.filter(f=>f.level==="attention").length} vérification(s).</p><div className="mt-5 space-y-3">{checks.length?checks.map((f,i)=><div className={"rounded-xl border p-4 "+(f.level==="important"?"border-red-100 bg-red-50":"border-amber-100 bg-amber-50")} key={i}><p className="text-sm font-semibold">{f.level==="important"?"À corriger : ":"À vérifier : "}{f.message}</p><a className="mt-2 inline-block text-xs font-bold text-blue-700 underline" href={f.reference} target="_blank" rel="noreferrer">Source officielle</a></div>):<p className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">Aucun élément détecté par ce contrôle limité. Cela ne constitue pas une certification légale.</p>}</div><div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4"><strong>Clauses suggérées (à adapter)</strong><pre className="mt-3 whitespace-pre-wrap font-sans text-sm">{paymentClauses(clientKind,30,vatExempt).join("\n")}</pre><button className={secondary} onClick={()=>void copyText(paymentClauses(clientKind,30,vatExempt).join("\n"))}>Copier les clauses</button></div></>}</article>
       </section>}
       {tab==="modeles"&&<section className="grid gap-6 lg:grid-cols-2"><article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Créer un document en français</h2><Field title="Modèle"><select className={inputClass} value={templateKind} onChange={e=>setTemplateKind(e.target.value as TemplateKind)}><option value="contrat">Contrat de prestation de services</option><option value="offre">Proposition commerciale</option><option value="acceptation">Bon pour accord</option><option value="cgv">Conditions générales de vente</option></select></Field>{docSelector}<button className={secondary} onClick={fillTemplateFromDocument} disabled={!selectedDoc}>Préremplir depuis le document sélectionné</button>
         {([["provider","Émetteur"],["providerAddress","Adresse de l'entreprise"],["providerSiret","SIRET / SIREN"],["client","Client"],["clientAddress","Adresse du client"],["description","Prestations / objet"],["amount","Montant et TVA"],["deadline","Dates / délais"]] as const).map(([key,label])=><Field key={key} title={label}><input className={inputClass} value={templateInfo[key]} onChange={e=>setTemplateInfo(v=>({...v,[key]:e.target.value}))}/></Field>)}
         <Field title="Nature du client"><select className={inputClass} value={clientKind} onChange={e=>setClientKind(e.target.value as ClientKind)}><option value="professionnel">Professionnel</option><option value="particulier">Particulier</option></select></Field></article>
-        <article className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Aperçu éditable</h2><p className="mt-2 text-sm text-slate-600">Brouillon à compléter et à faire valider selon votre secteur. Pas de garantie d&apos;exhaustivité juridique.</p><textarea className={inputClass+" mt-5 min-h-[540px] resize-y font-mono leading-6"} value={template} readOnly/><div className="mt-5 flex flex-wrap gap-3"><button className={primary} onClick={()=>void navigator.clipboard.writeText(template)}>Copier le modèle</button><button className={secondary} onClick={()=>downloadText(template,"ALEK-"+templateKind+".txt")}>Télécharger TXT</button></div></article>
+        <article className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Aperçu éditable</h2><p className="mt-2 text-sm text-slate-600">Brouillon à compléter et à faire valider selon votre secteur. Pas de garantie d&apos;exhaustivité juridique.</p><textarea className={inputClass+" mt-5 min-h-[540px] resize-y font-mono leading-6"} value={template} readOnly/><div className="mt-5 flex flex-wrap gap-3"><button className={primary} onClick={()=>void copyText(template)}>Copier le modèle</button><button className={secondary} onClick={()=>downloadText(template,"ALEK-"+templateKind+".txt")}>Télécharger TXT</button></div></article>
       </section>}
       {tab==="relances"&&<section className="grid gap-6 lg:grid-cols-2"><article className="space-y-5 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Préparer une relance</h2>{docSelector}<Field title="Type de message"><select className={inputClass} value={relanceKind} onChange={e=>setRelanceKind(e.target.value as typeof relanceKind)}><option value="devis">Envoi du devis</option><option value="avant">Avant échéance de la facture</option><option value="retard">Facture impayée</option></select></Field><p className="text-sm text-slate-600">Les messages ne sont pas envoyés automatiquement. Vous vérifiez et déclenchez personnellement l&apos;envoi.</p><p className="text-xs text-slate-500">N&apos;envoyez des messages qu&apos;aux personnes concernées par une relation contractuelle réelle. L&apos;automatisation SMS/WhatsApp requiert un fournisseur et des autorisations adaptés.</p></article>
-        <article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Message en français</h2><Field title="Objet"><input className={inputClass} readOnly value={relance.subject}/></Field><textarea className={inputClass+" min-h-[250px]"} readOnly value={relance.body}/><div className="flex flex-wrap gap-3"><button className={secondary} onClick={()=>void navigator.clipboard.writeText(relance.subject+"\n\n"+relance.body)}>Copier</button>{selectedDoc?.client_email&&<a className={primary} href={"mailto:"+encodeURIComponent(selectedDoc.client_email)+"?subject="+encodeURIComponent(relance.subject)+"&body="+encodeURIComponent(relance.body)}>Ouvrir l&apos;e-mail</a>}{selectedDoc?.client_phone&&<a className={secondary} target="_blank" rel="noreferrer" href={"https://wa.me/"+selectedDoc.client_phone.replace(/\D/g,"")+"?text="+encodeURIComponent(relance.body)}>Ouvrir WhatsApp</a>}</div>{selectedDoc&&!selectedDoc.client_email&&<p className="text-sm text-amber-700">Aucune adresse e-mail enregistrée pour ce client.</p>}</article>
+        <article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Message en français</h2><Field title="Objet"><input className={inputClass} readOnly value={relance.subject}/></Field><textarea className={inputClass+" min-h-[250px]"} readOnly value={relance.body}/><div className="flex flex-wrap gap-3"><button className={secondary} onClick={()=>void copyText(relance.subject+"\n\n"+relance.body)}>Copier</button>{selectedDoc?.client_email&&<a className={primary} href={"mailto:"+encodeURIComponent(selectedDoc.client_email)+"?subject="+encodeURIComponent(relance.subject)+"&body="+encodeURIComponent(relance.body)}>Ouvrir l&apos;e-mail</a>}{selectedDoc?.client_phone&&<a className={secondary} target="_blank" rel="noreferrer" href={"https://wa.me/"+selectedDoc.client_phone.replace(/\D/g,"")+"?text="+encodeURIComponent(relance.body)}>Ouvrir WhatsApp</a>}</div>{selectedDoc&&!selectedDoc.client_email&&<p className="text-sm text-amber-700">Aucune adresse e-mail enregistrée pour ce client.</p>}</article>
       </section>}
       {tab==="signature"&&<section className="grid gap-6 lg:grid-cols-2"><article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Faire signer un devis</h2><p className="text-sm leading-6 text-slate-600">Créez un lien personnel pour qu&apos;un client consulte le devis enregistré et le signe au doigt ou à la souris. Le contenu original est figé et une preuve SHA-256 est enregistrée.</p>{docSelector}{selectedDoc?.document_type==="facture"&&<p className="text-sm text-amber-700">Sélectionnez un devis plutôt qu&apos;une facture.</p>}<button className={primary} onClick={()=>void createSignatureLink()} disabled={!selectedDoc||selectedDoc.document_type!=="devis"||busy}>{busy?"Création…":"Créer le lien de signature (14 jours)"}</button><p className="text-xs text-slate-500">Signature simple, sans contrôle d&apos;identité fort ni certification qualifiée eIDAS. Pour contrats sensibles, utiliser une signature avancée ou qualifiée adaptée.</p></article>
-        <article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Lien sécurisé</h2><button className={secondary} onClick={()=>void refreshSignatures()}>Actualiser les signatures</button><div className="space-y-2">{signatureRequests.map(req=><div key={req.id} className="rounded-xl border border-slate-200 p-3 text-sm"><strong>{documents.find(d=>d.id===req.document_id)?.document_number||"Devis"}</strong><p className={req.status==="signed"?"font-semibold text-emerald-700":"text-slate-600"}>{req.status==="signed"?"Signé par "+(req.signer_name||""):"En attente de signature"} · {req.signed_at||req.created_at}</p>{req.signature_sha256&&<p className="mt-1 break-all text-xs text-slate-500">Empreinte preuve : {req.signature_sha256}</p>}</div>)}</div>{signatureLink?<><textarea readOnly className={inputClass+" min-h-[100px] break-all"} value={signatureLink}/><button className={secondary} onClick={()=>void navigator.clipboard.writeText(signatureLink)}>Copier le lien</button>{selectedDoc?.client_email&&<a className={primary} href={"mailto:"+encodeURIComponent(selectedDoc.client_email)+"?subject="+encodeURIComponent("Signature de votre devis "+selectedDoc.document_number)+"&body="+encodeURIComponent("Bonjour,\n\nVeuillez consulter et, si vous acceptez les termes, signer votre devis via ce lien personnel :\n"+signatureLink+"\n\nCordialement,\n"+selectedDoc.business_name)}>Envoyer via votre messagerie</a>}<p className="text-sm text-amber-800">Toute personne disposant de ce lien peut signer. Vérifiez l&apos;identité du destinataire par un autre canal.</p></>:<p className="text-sm text-slate-500">Le lien apparaîtra ici après la création.</p>}</article>
+        <article className="space-y-4 rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-2xl font-black">Lien sécurisé</h2><button className={secondary} onClick={()=>void refreshSignatures()}>Actualiser les signatures</button><div className="space-y-2">{signatureRequests.map(req=><div key={req.id} className="rounded-xl border border-slate-200 p-3 text-sm"><strong>{documents.find(d=>d.id===req.document_id)?.document_number||"Devis"}</strong><p className={req.status==="signed"?"font-semibold text-emerald-700":"text-slate-600"}>{req.status==="signed"?"Signé par "+(req.signer_name||""):"En attente de signature"} · {req.signed_at||req.created_at}</p>{req.signature_sha256&&<p className="mt-1 break-all text-xs text-slate-500">Empreinte preuve : {req.signature_sha256}</p>}</div>)}</div>{signatureLink?<><textarea readOnly className={inputClass+" min-h-[100px] break-all"} value={signatureLink}/><button className={secondary} onClick={()=>void copyText(signatureLink)}>Copier le lien</button>{selectedDoc?.client_email&&<a className={primary} href={"mailto:"+encodeURIComponent(selectedDoc.client_email)+"?subject="+encodeURIComponent("Signature de votre devis "+selectedDoc.document_number)+"&body="+encodeURIComponent("Bonjour,\n\nVeuillez consulter et, si vous acceptez les termes, signer votre devis via ce lien personnel :\n"+signatureLink+"\n\nCordialement,\n"+selectedDoc.business_name)}>Envoyer via votre messagerie</a>}<p className="text-sm text-amber-800">Toute personne disposant de ce lien peut signer. Vérifiez l&apos;identité du destinataire par un autre canal.</p></>:<p className="text-sm text-slate-500">Le lien apparaîtra ici après la création.</p>}</article>
       </section>}
       <p className="mt-9 text-center text-xs text-slate-500">Outils d&apos;assistance — ne remplacent ni un expert-comptable ni un juriste. Les factures PDF ordinaires ne remplacent pas l&apos;e-facturation via plateforme agréée.</p>
     </div>
-  </main>;
+  </main></>;
 }
