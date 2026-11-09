@@ -1,6 +1,7 @@
 import {createHmac,timingSafeEqual} from "node:crypto";
 import {NextResponse} from "next/server";
 import {reconcileStripeSubscription} from "../../../lib/stripe-reconcile";
+import {readTextBody,RequestBodyError} from "../../../lib/request-body";
 export const runtime="nodejs";
 
 type StripeEvent={id:string;type:string;data:{object:Record<string,unknown>}};
@@ -22,11 +23,14 @@ export async function POST(request:Request){
   const secret=process.env.STRIPE_WEBHOOK_SECRET;
   if(!secret)return NextResponse.json({error:"Webhook non configuré."},{status:503});
   const signature=request.headers.get("stripe-signature")||"";
-  const raw=await request.text();
-  if(raw.length>1_000_000)return NextResponse.json({error:"Événement trop volumineux."},{status:413});
+  let raw:string;
+  try{raw=await readTextBody(request,1_000_000);}catch(error){
+    if(error instanceof RequestBodyError)return NextResponse.json({error:error.message},{status:error.status});
+    return NextResponse.json({error:"Événement invalide."},{status:400});
+  }
   if(!authentic(raw,signature,secret))return NextResponse.json({error:"Signature invalide."},{status:400});
   let event:StripeEvent;
-  try{event=JSON.parse(raw) as StripeEvent;}catch{
+  try{event=JSON.parse(raw.charCodeAt(0)===0xfeff?raw.slice(1):raw) as StripeEvent;}catch{
     return NextResponse.json({error:"Événement invalide."},{status:400});
   }
   if(!event || typeof event!=="object" || !event.type || !event.data?.object)return NextResponse.json({error:"Événement incomplet."},{status:400});
@@ -48,9 +52,9 @@ export async function POST(request:Request){
   try{
     await reconcileStripeSubscription(subscriptionId);
     return NextResponse.json({received:true});
-  }catch(error){
+  }catch{
     // Stripe retries delivery on 5xx. Never grant access without verification.
-    console.error("Stripe webhook reconciliation failed",event.type,error);
+    console.error("Stripe webhook reconciliation failed");
     return NextResponse.json({error:"Synchronisation différée."},{status:503});
   }
 }
