@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { beginIssue, completeIssue, readIssueIntent, rejectIssue, startNewIssue } from '../app/lib/document-issuance.ts';
+import { beginIssue, completeIssue, issueRpcArgs, readIssueIntent, rejectIssue, startNewIssue } from '../app/lib/document-issuance.ts';
 class Store {
   values = new Map();
   getItem(k) { return this.values.get(k) ?? null; }
@@ -8,6 +8,12 @@ class Store {
   removeItem(k) { this.values.delete(k); }
 }
 const payload = { user_id: 'user-a', document_type: 'facture', services: [{ price: 25, quantity: 2 }], total_ht: 50 };
+test('v3 RPC receives the stored request as its required idempotency_key', () => {
+  const storage = new Store();
+  const intent = beginIssue(storage, 'user-a', payload);
+  assert.deepEqual(issueRpcArgs(intent), { p_payload: { ...payload, idempotency_key: intent.request_id } });
+  assert.deepEqual(issueRpcArgs(readIssueIntent(storage, 'user-a')), issueRpcArgs(intent));
+});
 test('retry after lost response or reload reuses the persisted request and immutable payload', () => {
   const storage = new Store();
   const first = beginIssue(storage, 'user-a', payload);
