@@ -1,3 +1,4 @@
+import {hasBlockingStripeSubscription} from "../../../lib/payment-policy";
 import {NextResponse} from "next/server";
 import {admin,userFrom} from "../../paypal/_shared";
 import {stripeConfigured,stripeRequest,validatedPrice,PLAN_CENTS,type Tier} from "../../../lib/stripe-billing";
@@ -19,11 +20,11 @@ export async function POST(request:Request){
     if(profile.role==="owner")return NextResponse.json({error:"Le compte administrateur dispose déjà de l'accès complet."},{status:409});
     if(profile.paypal_subscription_id && ["ACTIVE","APPROVAL_PENDING","APPROVED","SUSPENDED"].includes(String(profile.paypal_subscription_status||"").toUpperCase()))
       return NextResponse.json({error:"Un abonnement PayPal existe déjà. Résiliez-le avant de souscrire par carte afin d'éviter un double prélèvement."},{status:409});
-    if(profile.stripe_subscription_id && ["active","trialing","past_due","unpaid","paused"].includes(String(profile.stripe_subscription_status||"")))
+    if(hasBlockingStripeSubscription(profile.stripe_subscription_id,profile.stripe_subscription_status))
       return NextResponse.json({error:"Un abonnement par carte existe déjà ou nécessite une mise à jour. Contactez le support pour éviter un double abonnement."},{status:409});
     const priceId=await validatedPrice(tier);
     const params=new URLSearchParams();
-    params.set("ui_mode","embedded_page");
+    params.set("ui_mode","embedded");
     params.set("mode","subscription");
     params.set("locale","fr");
     params.set("payment_method_types[0]","card");

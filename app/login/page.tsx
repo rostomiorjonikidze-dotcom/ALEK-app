@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { supabase } from "../lib/supabase";
+
+import { authErrorMessage, initializeAuthSession, passwordIsStrong } from "../lib/auth";
 
 type Mode = "login" | "signup";
 
@@ -45,16 +47,6 @@ const texts = {
   },
 };
 
-function authErrorMessage(message: string): string {
-  if (/invalid login credentials|invalid password|invalid credentials/i.test(message)) return "Adresse e-mail ou mot de passe incorrect.";
-  if (/email not confirmed/i.test(message)) return "Veuillez confirmer votre adresse e-mail avant de vous connecter.";
-  if (/user already registered|already registered/i.test(message)) return "Cette adresse e-mail est déjà utilisée.";
-  if (/password.*(?:weak|short|at least)/i.test(message)) return "Le mot de passe ne respecte pas les critères de sécurité.";
-  if (/rate limit|too many requests|security purposes/i.test(message)) return "Trop de tentatives. Réessayez un peu plus tard.";
-  if (/invalid email/i.test(message)) return "Veuillez saisir une adresse e-mail valide.";
-  return "Opération impossible. Vérifiez vos informations et réessayez.";
-}
-
 export default function LoginPage() {
   const router = useRouter();
   const captchaRef = useRef<HCaptcha>(null);
@@ -77,6 +69,22 @@ export default function LoginPage() {
   const [showConfirmPassword] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    if (!params.has("code") && !hash.has("access_token") && !params.has("error") && !hash.has("error")) return;
+    let active = true;
+    void (async () => {
+      try {
+        if (params.has("error") || hash.has("error")) throw new Error("expired token");
+        const session = await initializeAuthSession(supabase.auth);
+        if (active && session) { router.replace("/dashboard"); router.refresh(); }
+        else if (active) setMessage("Connectez-vous pour accéder à votre espace.");
+      } catch (error) { if (active) setMessage(authErrorMessage(error)); }
+    })();
+    return () => { active = false; };
+  }, [router]);
+
   const t = texts.fr;
   const recoveryLabels = [
     "Mot de passe oublié ?",
@@ -93,26 +101,18 @@ export default function LoginPage() {
     return value.replace(/\D/g, "").slice(0, 14);
   }
 
-  function passwordIsStrong(value: string) {
-    const hasUppercase = /[A-Z]/.test(value);
-    const hasLowercase = /[a-z]/.test(value);
-    const hasNumber = /\d/.test(value);
-    const hasSpecial = /[^A-Za-z0-9]/.test(value);
-
-    return hasUppercase && hasLowercase && hasNumber && hasSpecial;
-  }
-
   async function handleRecovery() {
     setMessage("");
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) { setMessage(t.required); return; }
+    if (captchaEnabled && !captchaToken) { setMessage(t.captchaRequired); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password` });
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password`, ...(captchaEnabled ? { captchaToken } : {}) });
       if (error) { setMessage(authErrorMessage(error.message)); return; }
       setMessage(recoveryLabels[2]);
     } catch { setMessage("Impossible de demander la réinitialisation du mot de passe. Réessayez."); }
-    finally { setLoading(false); }
+    finally { setLoading(false); captchaRef.current?.resetCaptcha(); setCaptchaToken(""); }
   }
 
   async function handleSubmit() {
@@ -155,10 +155,6 @@ export default function LoginPage() {
         return;
       }
 
-      if (captchaEnabled && !captchaToken) {
-        setMessage(t.captchaRequired);
-        return;
-      }
     }
 
     if (!cleanEmail || !password) {
@@ -166,6 +162,7 @@ export default function LoginPage() {
       return;
     }
 
+    if (captchaEnabled && !captchaToken) { setMessage(t.captchaRequired); return; }
     setLoading(true);
 
     try {
@@ -174,6 +171,7 @@ export default function LoginPage() {
           email: cleanEmail,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/login`,
             ...(captchaEnabled && captchaToken ? { captchaToken } : {}),
             data: {
               first_name: firstName.trim(),
@@ -184,20 +182,18 @@ export default function LoginPage() {
           },
         });
 
-        captchaRef.current?.resetCaptcha();
-        setCaptchaToken("");
-
         if (error) {
           setMessage(authErrorMessage(error.message));
           return;
         }
 
         setMessage(data.session ? t.accountReady : t.signupSuccess);
-        if (data.session) setMode("login");
+        if (data.session) { router.replace("/dashboard"); router.refresh(); }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password,
+          options: captchaEnabled ? { captchaToken } : undefined,
         });
 
         if (error) {
@@ -208,7 +204,11 @@ export default function LoginPage() {
         router.push("/dashboard");
         router.refresh();
       }
+    } catch (error) {
+      setMessage(authErrorMessage(error));
     } finally {
+      captchaRef.current?.resetCaptcha();
+      setCaptchaToken("");
       setLoading(false);
     }
   }
@@ -306,7 +306,8 @@ export default function LoginPage() {
           {recoveryMode ? recoveryLabels[1] : mode === "login" ? t.subtitleLogin : t.subtitleSignup}
         </p>
 
-        <div
+        <form
+          onSubmit={(event) => { event.preventDefault(); if (!loading) void (recoveryMode ? handleRecovery() : handleSubmit()); }}
           style={{
             display: "grid",
             gap: "12px",
@@ -323,6 +324,8 @@ export default function LoginPage() {
               >
                 <input
                   style={inputStyle}
+                  aria-label={t.firstName}
+                  required
                   placeholder={t.firstName}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
@@ -331,6 +334,8 @@ export default function LoginPage() {
 
                 <input
                   style={inputStyle}
+                  aria-label={t.lastName}
+                  required
                   placeholder={t.lastName}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -340,6 +345,8 @@ export default function LoginPage() {
 
               <input
                 style={inputStyle}
+                aria-label={t.company}
+                required
                 placeholder={t.company}
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
@@ -348,6 +355,8 @@ export default function LoginPage() {
 
               <input
                 style={inputStyle}
+                aria-label={t.siret}
+                required
                 placeholder={t.siret}
                 value={siret}
                 inputMode="numeric"
@@ -359,6 +368,8 @@ export default function LoginPage() {
           <input
             style={inputStyle}
             type="email"
+            aria-label={t.email}
+            required
             placeholder={t.email}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -368,6 +379,8 @@ export default function LoginPage() {
           {!recoveryMode && <div style={{display:"flex",gap:"8px",alignItems:"center"}}><input
             style={{...inputStyle,flex:1,minWidth:0}}
             type={showPassword ? "text" : "password"}
+            aria-label={t.password}
+            required
             placeholder={t.password}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -380,6 +393,8 @@ export default function LoginPage() {
             <input
               style={inputStyle}
               type={showConfirmPassword ? "text" : "password"}
+              aria-label={t.confirmPassword}
+              required
               placeholder={t.confirmPassword}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -402,24 +417,6 @@ export default function LoginPage() {
                 Minimum 10 caractères : majuscule, minuscule, chiffre et caractère spécial.
               </div>
 
-              {captchaEnabled && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "center",
-                    minHeight: "80px",
-                    alignItems: "center",
-                  }}
-                >
-                  <HCaptcha
-                    ref={captchaRef}
-                    sitekey={captchaSiteKey}
-                    onVerify={(token) => setCaptchaToken(token)}
-                    onExpire={() => setCaptchaToken("")}
-                    onError={() => setCaptchaToken("")}
-                  />
-                </div>
-              )}
 
               <div
                 style={{
@@ -433,8 +430,28 @@ export default function LoginPage() {
             </>
           )}
 
+          {captchaEnabled && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                minHeight: "80px",
+                alignItems: "center",
+              }}
+            >
+              <HCaptcha
+                ref={captchaRef}
+                sitekey={captchaSiteKey}
+                languageOverride="fr"
+                size="compact"
+                onVerify={(token) => setCaptchaToken(token)}
+                onExpire={() => setCaptchaToken("")}
+                onError={() => setCaptchaToken("")}
+              />
+            </div>
+          )}
           <button
-            onClick={recoveryMode ? handleRecovery : handleSubmit}
+            type="submit"
             disabled={loading}
             style={{
               width: "100%",
@@ -457,7 +474,7 @@ export default function LoginPage() {
           </button>
 
           {message && (
-            <div
+            <div role="status"
               style={{
                 marginTop: "5px",
                 padding: "11px 12px",
@@ -471,16 +488,15 @@ export default function LoginPage() {
             </div>
           )}
 
-          {mode === "login" && message && <button type="button" onClick={()=>setMessage("")} style={{border:"1px solid #bfdbfe",background:"#eff6ff",color:"#1d4ed8",borderRadius:10,padding:12,fontWeight:700,cursor:"pointer"}}>{t.loginButton} →</button>}
-          {mode === "login" && !recoveryMode && <button type="button" onClick={()=>{setMessage("");setRecoveryMode(true);}} style={{border:0,background:"transparent",color:"#1677ff",padding:"9px",cursor:"pointer"}}>{recoveryLabels[0]}</button>}
+          {mode === "login" && !recoveryMode && <button type="button" disabled={loading} onClick={()=>{setMessage("");setCaptchaToken("");captchaRef.current?.resetCaptcha();setRecoveryMode(true);}} style={{border:0,background:"transparent",color:"#1677ff",padding:"9px",cursor:"pointer"}}>{recoveryLabels[0]}</button>}
           <button
             type="button"
+            disabled={loading}
             onClick={() => {
-              if(recoveryMode){setRecoveryMode(false);setMessage("");return;}
-              setMessage("");
               setCaptchaToken("");
               captchaRef.current?.resetCaptcha();
-
+              if(recoveryMode){setRecoveryMode(false);setMessage("");return;}
+              setMessage("");
               setMode(mode === "login" ? "signup" : "login");
             }}
             style={{
@@ -496,7 +512,7 @@ export default function LoginPage() {
           >
             {recoveryMode ? recoveryLabels[3] : mode === "login" ? t.noAccount : t.hasAccount}
           </button>
-        </div>
+        </form>
       </div>
     </main>
   );
