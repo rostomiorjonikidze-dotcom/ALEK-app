@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const base = process.env.ALEK_BASE_URL || "https://app.alek.best";
+const base = process.env.ALEK_BASE_URL || "http://127.0.0.1:3000";
 const publicPaths = [
   "/", "/login", "/pricing", "/dashboard", "/a-propos",
   "/contact", "/privacy", "/terms", "/refund", "/mentions-legales",
@@ -49,4 +49,17 @@ test("AI endpoint rejects unauthenticated POST", async () => {
 test("AI endpoint rejects GET", async () => {
   const response = await request("/api/ai");
   assert.equal(response.status, 405);
+});
+
+for (const path of ["/api/documents/share", "/api/signatures", "/api/legal/generate", "/api/photo-quote/analyze", "/api/receipts/scan", "/api/paypal/checkout", "/api/paypal/sync", "/api/paypal/subscription/cancel", "/api/stripe/checkout", "/api/stripe/confirm", "/api/stripe/subscription/cancel"]) {
+  test(`${path} rejects unauthenticated POST`, async () => {
+    const response = await request(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    assert.equal(response.status, 401);
+  });
+}
+
+test("signature pages do not leak bearer links via referrers or indexing", async () => {
+  const response = await request("/sign/invalid");
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow");
 });

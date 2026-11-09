@@ -1,4 +1,5 @@
 import "server-only";
+import {hasBlockingStripeSubscription} from "./payment-policy";
 import {admin} from "../api/paypal/_shared";
 import {getSubscription,tierFromPrice,verifiedPaidTier} from "./stripe-billing";
 
@@ -18,10 +19,10 @@ export async function reconcileStripeSubscription(id:string,expectedUser?:string
   if(error||!profile)throw Error("Customer profile unavailable");
   // A callback for a canceled older subscription must not overwrite a newer active subscription.
   if(profile.stripe_subscription_id && profile.stripe_subscription_id!==sub.id
-     && ["active","trialing","past_due"].includes(String(profile.stripe_subscription_status||"")))
+     && hasBlockingStripeSubscription(profile.stripe_subscription_id,profile.stripe_subscription_status))
     return {status:"different_subscription",plan:profile.plan};
   const activeTier=verifiedPaidTier(sub);
-  const paypalActive=["ACTIVE","APPROVED","SUSPENDED"].includes(String(profile.paypal_subscription_status||"").toUpperCase());
+  const paypalActive=String(profile.paypal_subscription_status||"").toUpperCase()==="ACTIVE";
   const plan=profile.role==="owner"?"business":activeTier|| (paypalActive?String(profile.plan||"free"):"free");
   const {error:writeError}=await db.from("profiles").update({
     stripe_subscription_id:sub.id,

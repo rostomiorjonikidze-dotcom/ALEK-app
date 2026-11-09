@@ -9,7 +9,7 @@ signature simple de devis et gestion des abonnements PayPal.
 - Node.js 22+
 - Un projet Supabase (authentification + tables `profiles`, `documents`,
   `artisan_clients`, `artisan_catalog`, `artisan_expenses`, `artisan_signature_requests`
-  et les fonctions RPC `reserve_ai_usage` / `refund_ai_usage`)
+  et les fonctions RPC `issue_artisan_document_v2`, `reserve_ai_usage` / `refund_ai_usage`)
 - Une clé API Groq pour l'assistant IA
 - Des identifiants PayPal (sandbox ou live) pour les abonnements
 
@@ -51,17 +51,29 @@ première utilisation (voir `app/lib/supabase.ts`).
 | `npm start` | Serveur de production |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `next typegen` puis `tsc --noEmit` |
-| `npm test` | Tests des modèles de conformité française |
+| `npm test` | Tests hors ligne : authentification, documents, paiements et validation |
 
 ## Tests
 
-- `tests/pro-compliance.test.mjs` — modèles de conformité (exécutable hors ligne).
-- `tests/public-smoke.test.mjs` — vérifie les pages publiques déployées et le contrôle
-  d'authentification de `/api/ai`. Lancez-le après un déploiement :
-
 ```bash
-ALEK_BASE_URL=https://app.alek.best node --test tests/public-smoke.test.mjs
+npm test
+npm run lint
+npm run typecheck
+npm run build
+npm start
+# Dans un autre terminal :
+ALEK_BASE_URL=http://127.0.0.1:3000 node --test tests/public-smoke.test.mjs
 ```
 
-Les deux suites tournent dans GitHub Actions (`.github/workflows/public-smoke.yml`), avec
-en plus `lint`, `typecheck` et `build`.
+Les tests de paiement utilisent des services simulés et ne lancent aucun paiement.
+La CI vérifie le build de la branche localement, sans appeler la production.
+
+Le paiement par carte nécessite également les variables Stripe de `.env.example`.
+Les clés publiques sont intégrées au build ; utilisez une configuration de test
+isolée pour vérifier les parcours connectés. La livraison des e-mails et les URL
+Supabase autorisées se configurent dans le service d'authentification.
+
+Voir [le rapport d'audit](docs/AUDIT-2026-11-09.md) pour les corrections, les limites
+vérifiées et les prérequis de déploiement. Aucun schéma SQL ni politique RLS n'est
+fourni actuellement : ne présumez pas que les contrôles du navigateur protègent
+les données ou garantissent la numérotation.

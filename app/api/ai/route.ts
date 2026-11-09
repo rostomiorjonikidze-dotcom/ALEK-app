@@ -252,7 +252,7 @@ Transforme ce texte en contenu professionnel pour devis/facture.
     }
 
     return NextResponse.json(
-      { error: "Erreur lors de la génération AI" },
+      { error: "Erreur lors de la génération IA" },
       { status: 500 },
     );
   }

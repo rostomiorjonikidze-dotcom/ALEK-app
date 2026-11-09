@@ -77,7 +77,7 @@ export default function PricingPage() {
           {[
             ["Gratuit", "0 €", "3 générations IA / mois", "Devis et factures illimités"],
             ["Pro", "19,99 € / mois", "10 générations IA / mois", "Devis et factures illimités"],
-            ["Business", "49,99 € / mois", "IA illimitée", "Devis et factures illimités"],
+            ["Avancé", "49,99 € / mois", "IA illimitée", "Devis et factures illimités"],
             ["Entreprise", "Sur devis", "Fonctions multi-utilisateurs à venir", "Contactez-nous pour vos besoins"],
           ].map(([name, price, ai, docs]) => (
             <article key={name} className={`rounded-3xl border p-6 ${name === "Pro" ? "border-blue-500 bg-blue-50 shadow-[0_12px_30px_rgba(37,99,235,0.12)]" : "border-blue-100 bg-white"}`}>
@@ -87,7 +87,7 @@ export default function PricingPage() {
               <p className="mt-2 text-sm text-stone-700">✓ {docs}</p>
               <p className="mt-2 text-sm text-stone-700">✓ Création de PDF</p>
               <p className="mt-2 text-sm text-stone-700">✓ Historique des documents {name === "Entreprise" ? "(offre à définir)" : ""}</p>
-              {(name === "Pro" || name === "Business") && <button type="button" onClick={()=>start(name==="Pro"?"pro":"business")} className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">Payer par carte bancaire →</button>}
+              {(name === "Pro" || name === "Avancé") && <button type="button" onClick={()=>start(name==="Pro"?"pro":"business")} className="mt-6 w-full rounded-xl bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">Payer par carte bancaire →</button>}
             </article>
           ))}
         </section>
