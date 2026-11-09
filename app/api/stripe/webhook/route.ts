@@ -48,9 +48,9 @@ export async function POST(request:Request){
   try{
     await reconcileStripeSubscription(subscriptionId);
     return NextResponse.json({received:true});
-  }catch(error){
+  }catch{
     // Stripe retries delivery on 5xx. Never grant access without verification.
-    console.error("Stripe webhook reconciliation failed",event.type,error);
+    console.error("Stripe webhook reconciliation failed");
     return NextResponse.json({error:"Synchronisation différée."},{status:503});
   }
 }

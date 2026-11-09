@@ -1,4 +1,4 @@
-import { remainingPlan } from "../../../lib/payment-policy";
+import { planAfterPaypalSync, remainingPlan } from "../../../lib/payment-policy";
 import { NextResponse } from "next/server";
 import { admin, subscription, userFrom } from "../_shared";
 export const runtime="nodejs";
@@ -27,7 +27,7 @@ export async function POST(request:Request) {
   if(matchedPlan!=="pro" && matchedPlan!=="business")
     return NextResponse.json({error:"Formule d’abonnement non reconnue."},{status:403});
   const status=String(details.status || "").toUpperCase();
-  const plan=status==="ACTIVE"?(fallback==="business"?fallback:matchedPlan):fallback;
+  const plan=planAfterPaypalSync(status,matchedPlan,fallback);
   // Never replace a different active subscription with a pending one.
   if(requested && profile.paypal_subscription_id && profile.paypal_subscription_id!==requested) {
    const existing=await subscription(profile.paypal_subscription_id);

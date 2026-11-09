@@ -55,8 +55,9 @@ export default function PricingPage() {
     window.requestAnimationFrame(()=>document.getElementById("paiement-par-carte")?.scrollIntoView({behavior:"smooth",block:"start"}));
   }
   return (
-    <main className="alek-public-page min-h-screen bg-[#f3f6fc] text-[#14213b]">
+    <>
       <SiteHeader />
+      <main id="contenu-principal" tabIndex={-1} className="alek-public-page min-h-screen scroll-mt-24 bg-[#f3f6fc] text-[#14213b]">
       <div className="px-4 py-10">
       <div className="mx-auto max-w-6xl">
         <header className="relative overflow-hidden rounded-[34px] border border-white/10 bg-gradient-to-br from-[#071a35] via-[#133a78] to-[#215bb4] p-9 text-white shadow-[0_25px_75px_rgba(16,45,95,.22)]">
@@ -131,6 +132,7 @@ export default function PricingPage() {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4"><Link href="/login" className="rounded-xl bg-blue-600 px-7 py-4 font-bold text-white hover:bg-blue-700">Commencer gratuitement →</Link><Link href="/" className="rounded-xl border border-blue-200 px-7 py-4 font-bold text-blue-700 hover:bg-blue-50">Retour à l’accueil</Link></div><Footer />
       </div>
       </div>
-    </main>
+      </main>
+    </>
   );
 }
