@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
-import { NotoSansBase64 } from "../lib/notosans-font";
-import { NotoSansGeorgianBase64 } from "../lib/notosansgeorgian-font";
-import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates } from "../lib/document-math";
+import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates, validVatRate } from "../lib/document-math";
+import { loadPdfRuntime } from "../lib/pdf-runtime";
+import { canDeleteDocument, canModifyDocument } from "../lib/document-policy";
+import { loadAccountDraft, saveAccountDraft } from "../lib/document-drafts";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -238,6 +237,8 @@ export default function Home() {
   const [usageCount, setUsageCount] = useState(0);
   const [userRole, setUserRole] = useState("user");
   const [userEmail, setUserEmail] = useState("");
+  const [draftUserId, setDraftUserId] = useState<string | null>(null);
+  const [loadedDraftUserId, setLoadedDraftUserId] = useState<string | null>(null);
 
   const [savedDocuments, setSavedDocuments] = useState<SavedDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -252,7 +253,7 @@ export default function Home() {
   const [historySearch, setHistorySearch] = useState("");
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const [hydrated, setHydrated] = useState(false);
+  const isReadOnlyInvoice = Boolean(selectedDocumentId && documentType === "facture");
 
   const materialFromServices = useMemo(
     () => services.filter((item) => item.type === "material").reduce((sum, item) => sum + serviceTotal(item), 0),
@@ -279,56 +280,77 @@ export default function Home() {
   }, [savedDocuments, historyFilter, historySearch]);
 
   useEffect(() => {
+    if (!draftUserId) return;
     try {
-      const raw = localStorage.getItem("alek-draft-v2");
-      if (raw) {
-        const draft = JSON.parse(raw);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- Existing dynamic integration; tracked for typed/lifecycle refactor.
+      setSelectedDocumentId(null);
+      const draft = loadAccountDraft(localStorage, draftUserId);
+      if (draft) {
         setSiteLang("fr");
         setInputLang("fr");
-        setDescription(draft.description || "");
-        setFrenchText(draft.frenchText || "");
+        setDescription(String(draft.description || ""));
+        setFrenchText(String(draft.frenchText || ""));
         setServices(Array.isArray(draft.services) ? draft.services.map(normalizeService) : []);
-        setClientName(draft.clientName || "");
-        setClientAddress(draft.clientAddress || "");
-        setClientPhone(draft.clientPhone || "");
-        setClientEmail(draft.clientEmail || "");
-        setBusinessName(draft.businessName || "");
-        setBusinessAddress(draft.businessAddress || "");
-        setBusinessPhone(draft.businessPhone || "");
-        setBusinessEmail(draft.businessEmail || "");
-        setBusinessSiret(draft.businessSiret || "");
+        setClientName(String(draft.clientName || ""));
+        setClientAddress(String(draft.clientAddress || ""));
+        setClientPhone(String(draft.clientPhone || ""));
+        setClientEmail(String(draft.clientEmail || ""));
+        setBusinessName(String(draft.businessName || ""));
+        setBusinessAddress(String(draft.businessAddress || ""));
+        setBusinessPhone(String(draft.businessPhone || ""));
+        setBusinessEmail(String(draft.businessEmail || ""));
+        setBusinessSiret(String(draft.businessSiret || ""));
         setDocumentType(draft.documentType === "facture" ? "facture" : "devis");
         setDevisNumber("");
-        setDevisDate(draft.devisDate || "");
-        setValidUntil(draft.validUntil || "");
+        setDevisDate(String(draft.devisDate || todayInput()));
+        setValidUntil(String(draft.validUntil || datePlusDays(30)));
         setInvoiceNumber("");
-        setDevisReference(draft.devisReference || "");
-        setInvoiceDate(draft.invoiceDate || "");
-        setInvoiceDueDate(draft.invoiceDueDate || "");
-        setPaymentTerms(draft.paymentTerms || "");
-        setPaymentMethod(draft.paymentMethod || "");
-        setInvoiceStatus(draft.invoiceStatus || "unpaid");
+        setDevisReference(String(draft.devisReference || ""));
+        setInvoiceDate(String(draft.invoiceDate || ""));
+        setInvoiceDueDate(String(draft.invoiceDueDate || ""));
+        setPaymentTerms(String(draft.paymentTerms || ""));
+        setPaymentMethod(String(draft.paymentMethod || ""));
+        setInvoiceStatus(String(draft.invoiceStatus || "unpaid"));
         setVatRate(Number(draft.vatRate) || 0);
         setVatExemptionConfirmed(Boolean(draft.vatExemptionConfirmed));
         setClientIsProfessional(Boolean(draft.clientIsProfessional));
       } else {
+        setDescription("");
+        setFrenchText("");
+        setServices([]);
+        setClientName("");
+        setClientAddress("");
+        setClientPhone("");
+        setClientEmail("");
+        setBusinessName("");
+        setBusinessAddress("");
+        setBusinessPhone("");
+        setBusinessEmail("");
+        setBusinessSiret("");
+        setDocumentType("devis");
         setDevisNumber("");
         setDevisDate(todayInput());
         setValidUntil(datePlusDays(30));
+        setInvoiceNumber("");
+        setDevisReference("");
+        setInvoiceDate("");
+        setInvoiceDueDate("");
+        setPaymentTerms("");
+        setPaymentMethod("");
+        setInvoiceStatus("unpaid");
+        setVatRate(0);
+        setVatExemptionConfirmed(false);
+        setClientIsProfessional(false);
       }
+      setLoadedDraftUserId(draftUserId);
     } catch (error) {
       console.error("Draft load error", error);
-    } finally {
-      setHydrated(true);
     }
-  }, []);
+  }, [draftUserId]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem(
-      "alek-draft-v2",
-      JSON.stringify({
+    if (!draftUserId || loadedDraftUserId !== draftUserId) return;
+    try {
+      saveAccountDraft(localStorage, draftUserId, {
         siteLang,
         inputLang,
         description,
@@ -357,10 +379,13 @@ export default function Home() {
         vatRate,
         vatExemptionConfirmed,
         clientIsProfessional,
-      }),
-    );
+      });
+    } catch (error) {
+      console.error("Draft save error", error);
+    }
   }, [
-    hydrated,
+    draftUserId,
+    loadedDraftUserId,
     siteLang,
     inputLang,
     description,
@@ -404,6 +429,7 @@ export default function Home() {
       router.push("/login");
       return;
     }
+    setDraftUserId(user.id);
     setUserEmail(user.email || "");
 
     const { data, error } = await supabase
@@ -665,6 +691,10 @@ export default function Home() {
   async function saveDocumentToDatabase() {
     // Document numbers are allocated by Supabase during the actual insert.
     // A client-local counter can produce duplicate legal invoice numbers.
+    if (selectedDocumentId && !canModifyDocument({ document_type: documentType })) {
+      alert("Cette facture émise est en lecture seule. La création d’un avoir n’est pas disponible dans le schéma actuel.");
+      return;
+    }
     if (savingDocument || !validateDocument(Boolean(selectedDocumentId))) return;
     setSavingDocument(true);
     try {
@@ -740,6 +770,11 @@ export default function Home() {
   }
 
   async function deleteSavedDocument(id: string) {
+    const target = savedDocuments.find((document) => document.id === id);
+    if (!target || !canDeleteDocument(target)) {
+      alert("Une facture émise ne peut pas être supprimée depuis cette interface.");
+      return;
+    }
     if (!window.confirm(`${t.delete}?`)) return;
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) { alert(t.loginRequired); return; }
@@ -786,7 +821,7 @@ export default function Home() {
       alert("Renseignez des dates valides : l’échéance ou la fin de validité ne peut pas précéder la date du document.");
       return false;
     }
-    if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || !Number.isFinite(totalTTC)) {
+    if (!validVatRate(vatRate) || !Number.isFinite(totalTTC)) {
       alert("Vérifiez le taux de TVA et les montants du document.");
       return false;
     }
@@ -798,14 +833,15 @@ export default function Home() {
     return true;
   }
 
-  function createPdf() {
+  async function createPdf() {
     if (!validateDocument()) return;
     if(vatExemptionConfirmed && vatRate!==0){alert("La franchise en base de TVA nécessite un taux de TVA à 0 %.");return;}
     if(vatRate===0 && !vatExemptionConfirmed && !window.confirm("TVA à 0 % : confirmez que votre régime de TVA ou l’exonération applicable est correctement documenté. Continuer sans mention article 293 B ?"))return;
+    const { jsPDF, autoTable, latinFont, georgianFont } = await loadPdfRuntime();
     const doc = new jsPDF();
-    doc.addFileToVFS("NotoSans-Regular.ttf", NotoSansBase64);
+    doc.addFileToVFS("NotoSans-Regular.ttf", latinFont);
     doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
-    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", NotoSansGeorgianBase64);
+    doc.addFileToVFS("NotoSansGeorgian-Regular.ttf", georgianFont);
     doc.addFont("NotoSansGeorgian-Regular.ttf", "NotoGeorgian", "normal");
     const hasGeorgian = (value: string) => /[\u10a0-\u10ff\u1c90-\u1cbf]/u.test(value);
     const mixedRuns = (value: string) => {
@@ -948,7 +984,7 @@ export default function Home() {
       alternateRowStyles: { fillColor: [246, 249, 253] },
       columnStyles: { 0: { cellWidth: 78 }, 1: { cellWidth: 26 }, 2: { cellWidth: 36 }, 3: { cellWidth: 34 } },
     });
-    let y = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? descriptionY) + 12;
+    let y = ((doc as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? descriptionY) + 12;
     if (y + 65 > pageHeight - 18) { doc.addPage(); y = 25; }
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
@@ -990,6 +1026,13 @@ export default function Home() {
       doc.text(`ALEK Artisan · ${page} / ${pageCount}`, right, pageHeight - 10, { align: "right" });
     }
     doc.save(`ALEK-${documentType === "facture" ? "Facture" : "Devis"}-${safe(number).replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf`);
+  }
+
+  function exportPdf() {
+    void createPdf().catch((error) => {
+      console.error("PDF export failed", error);
+      alert("Impossible de créer le PDF. Réessayez après avoir vérifié le document.");
+    });
   }
 
   const navButton = "w-full rounded-xl px-4 py-3 text-left font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-blue-400";
@@ -1116,7 +1159,7 @@ export default function Home() {
               </div>
             </div>
 
-            {historyLoading ? <p className="text-stone-500">Chargement…</p> : filteredDocuments.length === 0 ? <p className="text-stone-500">{t.noDocuments}</p> : <div className="space-y-3">{filteredDocuments.map((doc) => <div key={doc.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-xs font-bold ${doc.document_type === "facture" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-800"}`}>{doc.document_type === "facture" ? t.facture : t.devis}</span><p className="font-bold">{doc.document_number}</p></div><p className="mt-2 text-sm text-stone-500">{doc.client_name || t.unknownClient} • {doc.document_date || "-"}</p></div><div className="flex items-center gap-2"><p className="mr-2 font-bold">{Number(doc.total_ttc || 0).toFixed(2)} €</p><button type="button" onClick={() => openSavedDocument(doc)} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white">{t.open}</button><button type="button" onClick={() => void deleteSavedDocument(doc.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600">{t.delete}</button></div></div></div>)}</div>}
+            {historyLoading ? <p className="text-stone-500">Chargement…</p> : filteredDocuments.length === 0 ? <p className="text-stone-500">{t.noDocuments}</p> : <div className="space-y-3">{filteredDocuments.map((doc) => <div key={doc.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-xs font-bold ${doc.document_type === "facture" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-800"}`}>{doc.document_type === "facture" ? t.facture : t.devis}</span><p className="font-bold">{doc.document_number}</p></div><p className="mt-2 text-sm text-stone-500">{doc.client_name || t.unknownClient} • {doc.document_date || "-"}</p></div><div className="flex items-center gap-2"><p className="mr-2 font-bold">{Number(doc.total_ttc || 0).toFixed(2)} €</p><button type="button" onClick={() => openSavedDocument(doc)} className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white">{t.open}</button>{canDeleteDocument(doc) && <button type="button" onClick={() => void deleteSavedDocument(doc.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-600">{t.delete}</button>}</div></div></div>)}</div>}
           </section>
         )}
 
@@ -1138,7 +1181,7 @@ export default function Home() {
             <textarea value={frenchText} onChange={(e) => setFrenchText(e.target.value)} placeholder={t.frenchPlaceholder} className="mt-4 h-40 w-full resize-none rounded-2xl border border-slate-200 bg-[#f8fbff] p-4 outline-none focus:border-green-500 focus:bg-white" />
           </section></div>
 
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Création de document</p><h2 className="mt-1 text-2xl font-black tracking-tight text-[#0f2347]">Création de {documentType === "devis" ? "devis" : "facture"}</h2></div><span className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">Document professionnel</span></div><div className="alek-editor-steps sticky top-2 z-20 mb-5 grid grid-cols-4 gap-2 rounded-[24px] border border-[#dce6f6] bg-white/95 p-2 text-center text-[10px] font-semibold text-slate-500 shadow-[0_18px_50px_rgba(16,42,85,.13)] backdrop-blur-xl sm:gap-3 sm:p-3 sm:text-sm">{[{label:"1. Client",target:"client-section"},{label:"2. Prestations",target:"services-section"},{label:"3. Entreprise",target:"settings-section"},{label:"4. Aperçu",target:"alek-live-preview"}].map((step)=><button type="button" key={step.target} onClick={()=>scrollToSection(step.target)} aria-current={editorStep === editorSections.findIndex((section) => section === step.target) ? "step" : undefined} className={`min-w-0 rounded-xl px-1 py-3 leading-tight transition hover:bg-blue-50 focus-visible:bg-blue-50 ${editorStep === editorSections.findIndex((section) => section === step.target) ? "bg-blue-600 font-bold text-white hover:bg-blue-700" : "text-blue-700"}`}>{step.label}</button>)}</div><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[#dbe7fa] bg-gradient-to-r from-[#eaf2ff] to-white px-5 py-4 shadow-sm"><p className="text-sm font-semibold text-slate-700">Étape {editorStep+1} sur 4 · {["Client","Prestations","Entreprise","Aperçu"][editorStep]}</p><div className="flex gap-2"><button type="button" disabled={editorStep===0} onClick={()=>scrollToSection(editorSections[Math.max(0,editorStep-1)])} className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">← Précédent</button><button type="button" disabled={editorStep===3} onClick={()=>scrollToSection(editorSections[Math.min(3,editorStep+1)])} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Suivant →</button></div></div><div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Progression du document</p><p className="mt-1 text-sm font-bold text-[#14213b]">{["Informations client","Prestations et produits","Tarification et entreprise","Aperçu et export"][editorStep]}</p></div><span className="text-sm font-black tabular-nums text-blue-700">{Math.round((editorStep+1)/4*100)}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300" style={{width:`${(editorStep+1)/4*100}%`}} /></div></div><div id="alek-live-preview" className={`mb-6 grid scroll-mt-6 gap-5 xl:grid-cols-[.85fr_1.15fr] ${editorStep === 3 ? "" : "hidden"}`}><section className="relative overflow-hidden rounded-[28px] border border-[#244b89] bg-gradient-to-br from-[#0b1e3e] via-[#163c78] to-[#2259aa] p-7 text-white shadow-[0_22px_65px_rgba(18,51,104,.20)]"><p className="text-xs font-black uppercase tracking-widest text-blue-200">✦ Assistant IA</p><h2 className="mt-3 text-2xl font-black">Votre document, plus simplement.</h2><p className="mt-3 leading-7 text-blue-100">Décrivez votre prestation dans le formulaire ci-dessous. L’assistant IA existant vous aide à rédiger votre document.</p><button type="button" onClick={()=>scrollToSection("alek-ai-assistant")} className="mt-6 rounded-xl bg-white px-5 py-3 font-bold text-[#153b78] shadow-lg hover:bg-blue-50">Créer mon document →</button></section><section className="rounded-[28px] border border-[#dce6f4] bg-white p-6 shadow-[0_22px_65px_rgba(20,45,83,.10)]"><div className="mb-4 flex items-center justify-between"><h2 className="font-black">Aperçu en direct</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{documentType === "devis"?"Devis":"Facture"}</span></div><div className="min-h-80 rounded-lg border border-slate-100 p-5 shadow-sm"><div className="flex justify-between gap-3 border-b pb-5"><div><p className="text-lg font-black text-blue-700">ALEK Artisan</p><p className="mt-2 text-xs text-slate-500">{businessName||"Votre entreprise"}</p></div><div className="text-right"><p className="font-black uppercase">{documentType}</p><p className="text-xs text-slate-500">{documentType==="devis"?(devisNumber||"Numéro à compléter"):(invoiceNumber||"Numéro à compléter")}</p></div></div><p className="mt-5 text-xs text-slate-400">Client</p><p className="font-bold">{clientName||"Nom du client"}</p><div className="mt-6 border-t">{services.length?services.slice(0,4).map((item,i)=><div key={i} className="flex justify-between gap-3 border-b py-3 text-xs"><span className="break-words">{item.description||"Prestation"}</span><strong>{money(serviceTotal(item))}</strong></div>):<p className="py-5 text-sm text-slate-400">Les prestations apparaîtront ici.</p>}</div><div className="mt-5 flex justify-between font-black"><span>Total HT</span><span>{money(totalHT)}</span></div><div className="mt-2 flex justify-between text-sm text-slate-600"><span>TVA ({vatRate} %)</span><span>{money(vatAmount)}</span></div><div className="mt-3 flex justify-between border-t border-blue-100 pt-3 text-lg font-black text-blue-700"><span>Total TTC</span><span>{money(totalTTC)}</span></div><p className="mt-5 text-[11px] text-slate-400">Aperçu indicatif, distinct du PDF final.</p></div></section></div><div className={`mb-6 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm ${editorStep === 3 ? "" : "hidden"}`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-[#14213b]">Votre document est prêt à être vérifié</p><p className="mt-1 text-xs text-slate-500">Enregistrez votre document ou téléchargez le PDF après vérification.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="flex-1 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 sm:flex-none">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="flex-1 rounded-xl bg-[#14213b] px-5 py-3 text-sm font-bold text-white hover:bg-[#243957] sm:flex-none">{t.createPdf}</button></div></div></div><section id="document-section" className="scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Création de document</p><h2 className="mt-1 text-2xl font-black tracking-tight text-[#0f2347]">{isReadOnlyInvoice ? "Facture émise — consultation" : `Création de ${documentType === "devis" ? "devis" : "facture"}`}</h2></div><span className="rounded-full border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">Document professionnel</span></div><div className="alek-editor-steps sticky top-2 z-20 mb-5 grid grid-cols-4 gap-2 rounded-[24px] border border-[#dce6f6] bg-white/95 p-2 text-center text-[10px] font-semibold text-slate-500 shadow-[0_18px_50px_rgba(16,42,85,.13)] backdrop-blur-xl sm:gap-3 sm:p-3 sm:text-sm">{[{label:"1. Client",target:"client-section"},{label:"2. Prestations",target:"services-section"},{label:"3. Entreprise",target:"settings-section"},{label:"4. Aperçu",target:"alek-live-preview"}].map((step)=><button type="button" key={step.target} onClick={()=>scrollToSection(step.target)} aria-current={editorStep === editorSections.findIndex((section) => section === step.target) ? "step" : undefined} className={`min-w-0 rounded-xl px-1 py-3 leading-tight transition hover:bg-blue-50 focus-visible:bg-blue-50 ${editorStep === editorSections.findIndex((section) => section === step.target) ? "bg-blue-600 font-bold text-white hover:bg-blue-700" : "text-blue-700"}`}>{step.label}</button>)}</div><div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-[#dbe7fa] bg-gradient-to-r from-[#eaf2ff] to-white px-5 py-4 shadow-sm"><p className="text-sm font-semibold text-slate-700">Étape {editorStep+1} sur 4 · {["Client","Prestations","Entreprise","Aperçu"][editorStep]}</p><div className="flex gap-2"><button type="button" disabled={editorStep===0} onClick={()=>scrollToSection(editorSections[Math.max(0,editorStep-1)])} className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 disabled:cursor-not-allowed disabled:opacity-40">← Précédent</button><button type="button" disabled={editorStep===3} onClick={()=>scrollToSection(editorSections[Math.min(3,editorStep+1)])} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">Suivant →</button></div></div><div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-500">Progression du document</p><p className="mt-1 text-sm font-bold text-[#14213b]">{["Informations client","Prestations et produits","Tarification et entreprise","Aperçu et export"][editorStep]}</p></div><span className="text-sm font-black tabular-nums text-blue-700">{Math.round((editorStep+1)/4*100)}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300" style={{width:`${(editorStep+1)/4*100}%`}} /></div></div><div id="alek-live-preview" className={`mb-6 grid scroll-mt-6 gap-5 xl:grid-cols-[.85fr_1.15fr] ${editorStep === 3 ? "" : "hidden"}`}><section className="relative overflow-hidden rounded-[28px] border border-[#244b89] bg-gradient-to-br from-[#0b1e3e] via-[#163c78] to-[#2259aa] p-7 text-white shadow-[0_22px_65px_rgba(18,51,104,.20)]"><p className="text-xs font-black uppercase tracking-widest text-blue-200">✦ Assistant IA</p><h2 className="mt-3 text-2xl font-black">Votre document, plus simplement.</h2><p className="mt-3 leading-7 text-blue-100">Décrivez votre prestation dans le formulaire ci-dessous. L’assistant IA existant vous aide à rédiger votre document.</p><button type="button" onClick={()=>scrollToSection("alek-ai-assistant")} className="mt-6 rounded-xl bg-white px-5 py-3 font-bold text-[#153b78] shadow-lg hover:bg-blue-50">Créer mon document →</button></section><section className="rounded-[28px] border border-[#dce6f4] bg-white p-6 shadow-[0_22px_65px_rgba(20,45,83,.10)]"><div className="mb-4 flex items-center justify-between"><h2 className="font-black">Aperçu en direct</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{documentType === "devis"?"Devis":"Facture"}</span></div><div className="min-h-80 rounded-lg border border-slate-100 p-5 shadow-sm"><div className="flex justify-between gap-3 border-b pb-5"><div><p className="text-lg font-black text-blue-700">ALEK Artisan</p><p className="mt-2 text-xs text-slate-500">{businessName||"Votre entreprise"}</p></div><div className="text-right"><p className="font-black uppercase">{documentType}</p><p className="text-xs text-slate-500">{documentType==="devis"?(devisNumber||"Numéro à compléter"):(invoiceNumber||"Numéro à compléter")}</p></div></div><p className="mt-5 text-xs text-slate-400">Client</p><p className="font-bold">{clientName||"Nom du client"}</p><div className="mt-6 border-t">{services.length?services.slice(0,4).map((item,i)=><div key={i} className="flex justify-between gap-3 border-b py-3 text-xs"><span className="break-words">{item.description||"Prestation"}</span><strong>{money(serviceTotal(item))}</strong></div>):<p className="py-5 text-sm text-slate-400">Les prestations apparaîtront ici.</p>}</div><div className="mt-5 flex justify-between font-black"><span>Total HT</span><span>{money(totalHT)}</span></div><div className="mt-2 flex justify-between text-sm text-slate-600"><span>TVA ({vatRate} %)</span><span>{money(vatAmount)}</span></div><div className="mt-3 flex justify-between border-t border-blue-100 pt-3 text-lg font-black text-blue-700"><span>Total TTC</span><span>{money(totalTTC)}</span></div><p className="mt-5 text-[11px] text-slate-400">Aperçu indicatif, distinct du PDF final.</p></div></section></div><div className={`mb-6 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm ${editorStep === 3 ? "" : "hidden"}`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-black text-[#14213b]">Votre document est prêt à être vérifié</p><p className="mt-1 text-xs text-slate-500">L’enregistrement attribue un numéro et émet immédiatement le document ; aucun brouillon serveur n’est créé.</p></div><div className="flex w-full flex-wrap gap-2 sm:w-auto"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument || isReadOnlyInvoice} className="flex-1 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700 sm:flex-none">{isReadOnlyInvoice ? "Facture émise — lecture seule" : savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={exportPdf} className="flex-1 rounded-xl bg-[#14213b] px-5 py-3 text-sm font-bold text-white hover:bg-[#243957] sm:flex-none">{t.createPdf}</button></div></div></div>{isReadOnlyInvoice && <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Facture émise : consultation et export PDF uniquement. Une correction nécessite un avoir ; cette interface ne prend pas encore en charge les avoirs. Les contrôles de cette interface ne remplacent pas les politiques RLS de la base.</div>}<section id="document-section" inert={isReadOnlyInvoice || undefined} className="scroll-mt-6 rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <div className="grid grid-cols-2 gap-3">
               <button type="button" onClick={() => { if (documentType !== "devis") createNewDevis(); }} className={`rounded-xl px-4 py-3 font-bold ${documentType === "devis" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>📄 {t.devis.toUpperCase()}</button>
               <button type="button" onClick={() => { if (documentType !== "facture") createNewInvoice(); }} className={`rounded-xl px-4 py-3 font-bold ${documentType === "facture" ? "bg-blue-600 text-white" : "border border-slate-200 bg-[#f8fbff]"}`}>🧾 {t.facture.toUpperCase()}</button>
@@ -1173,7 +1216,7 @@ export default function Home() {
             <div className="col-span-full flex flex-wrap gap-5 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm"><label className="flex items-center gap-2"><input type="checkbox" checked={clientIsProfessional} onChange={e=>setClientIsProfessional(e.target.checked)}/>Client professionnel (B2B) — clauses de retard et 40 €</label><label className="flex items-center gap-2"><input type="checkbox" checked={vatExemptionConfirmed} onChange={e=>{setVatExemptionConfirmed(e.target.checked);if(e.target.checked)setVatRate(0);}}/>Franchise en base de TVA confirmée (article 293 B du CGI)</label><p className="w-full text-xs text-slate-600">Cochez uniquement les situations réellement applicables. Les clauses sont ajoutées au PDF de facture. Vérifiez les mentions propres à votre activité.</p></div><label className="text-sm font-semibold">TVA<select value={vatRate} disabled={vatExemptionConfirmed} onChange={(e) => setVatRate(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 bg-[#f8fbff] p-3"><option value={0}>0%</option><option value={5.5}>5.5%</option><option value={10}>10%</option><option value={20}>20%</option></select></label>
             <div className="mt-5 grid gap-4 sm:grid-cols-2"><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.materials}</p><p className="mt-1 text-2xl font-bold">{materialFromServices.toFixed(2)} €</p></div><div className="rounded-2xl bg-[#f8fbff] p-4"><p className="text-sm text-stone-500">{t.laborTotal}</p><p className="mt-1 text-2xl font-bold">{laborFromServices.toFixed(2)} €</p></div></div>
             <div className="mt-4 rounded-2xl bg-[#f8efe5] p-5"><div className="flex justify-between"><span>HT</span><b>{totalHT.toFixed(2)} €</b></div><div className="mt-2 flex justify-between"><span>TVA ({vatRate}%)</span><b>{vatAmount.toFixed(2)} €</b></div><div className="mt-3 flex items-center justify-between border-t pt-3"><span className="text-lg font-bold">TTC</span><span className="text-3xl font-black">{totalTTC.toFixed(2)} €</span></div></div>
-            <p className="mt-4 text-xs leading-5 text-slate-500">Vérifiez les coordonnées du client, les prestations et la TVA avant l’enregistrement ou l’export PDF.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument} className="rounded-xl bg-emerald-600 px-5 py-4 font-bold text-white hover:bg-emerald-700">{savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={createPdf} className="rounded-xl bg-stone-800 px-5 py-4 font-bold text-white hover:bg-stone-700">{t.createPdf}</button></div>
+            <p className="mt-4 text-xs leading-5 text-slate-500">Vérifiez les coordonnées du client, les prestations et la TVA avant l’enregistrement ou l’export PDF.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => void saveDocumentToDatabase()} disabled={savingDocument || isReadOnlyInvoice} className="rounded-xl bg-emerald-600 px-5 py-4 font-bold text-white hover:bg-emerald-700">{isReadOnlyInvoice ? "Facture émise — lecture seule" : savingDocument ? "Enregistrement…" : selectedDocumentId ? t.updateDocument : t.saveDocument}</button><button type="button" onClick={exportPdf} className="rounded-xl bg-stone-800 px-5 py-4 font-bold text-white hover:bg-stone-700">{t.createPdf}</button></div>
           </section>
 
           <section className="rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
