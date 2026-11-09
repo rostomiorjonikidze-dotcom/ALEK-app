@@ -26,7 +26,18 @@ test("card subscription is activated only after verified paid checkout",()=>{
   assert.match(webhook,/stripe-signature/);
 });
 
-const {hasBlockingStripeSubscription, remainingPlan}=await import("../app/lib/payment-policy.ts");
+const {hasBlockingStripeSubscription, remainingPlan, planAfterPaypalSync}=await import("../app/lib/payment-policy.ts");
+const {billingIdempotencyKey}=await import("../app/lib/billing-idempotency.ts");
+
+test("provider idempotency keys are stable, isolated, and fit PayPal's limit",()=>{
+  const paypal=billingIdempotencyKey("paypal","checkout","user-123");
+  assert.equal(paypal,billingIdempotencyKey("paypal","checkout","user-123"));
+  assert.ok(paypal.length<=38);
+  assert.notEqual(paypal,billingIdempotencyKey("stripe","checkout","user-123"));
+  assert.notEqual(paypal,billingIdempotencyKey("paypal","cancel","user-123"));
+  assert.notEqual(paypal,billingIdempotencyKey("paypal","checkout","user-456"));
+  assert.throws(()=>billingIdempotencyKey("paypal","checkout",""),/identity/);
+});
 
 test("all nonterminal card subscriptions prevent a second subscription",()=>{
   for(const status of ["active","trialing","past_due","unpaid","paused","incomplete"]){
@@ -46,6 +57,13 @@ test("PayPal cancellation preserves only known active card entitlements and owne
   assert.equal(remainingPlan({stripe_subscription_status:"canceled",stripe_price_id:"price_business"},prices),"free");
   assert.equal(remainingPlan({stripe_subscription_status:"active",stripe_price_id:"price_unknown"},prices),"free");
   assert.equal(remainingPlan({stripe_subscription_status:"active"},{}),"free");
+});
+
+test("PayPal sync never downgrades or replaces an active Stripe entitlement",()=>{
+  assert.equal(planAfterPaypalSync("ACTIVE","business","pro"),"pro");
+  assert.equal(planAfterPaypalSync("ACTIVE","pro","business"),"business");
+  assert.equal(planAfterPaypalSync("CANCELLED","business","pro"),"pro");
+  assert.equal(planAfterPaypalSync("ACTIVE",null,"free"),"free");
 });
 
 test("Stripe REST calls pin the version compatible with v3 embedded checkout",()=>{
@@ -69,10 +87,15 @@ function paypalRoute(profile,plan){
     require(name){
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription};
+      if(name.endsWith("billing-idempotency"))return {billingIdempotencyKey};
       if(name==="../_shared")return {admin:()=>db,userFrom:async()=>({id:"user"}),paypalBase:()=>"https://mock.invalid",paypalToken:async()=>"mock"};
       throw Error("Unexpected import "+name);
     },
-    fetch:async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>plan};},
+    fetch:async(url,options)=>{
+      calls.push({url,options});
+      if(url.endsWith("/v1/billing/subscriptions"))return {ok:true,json:async()=>({links:[{rel:"approve",href:"https://www.sandbox.paypal.com/checkoutnow?token=mock"}]})};
+      return {ok:true,json:async()=>plan};
+    },
   });
   return {post:()=>exports.POST({json:async()=>({plan:"pro"})}),calls};
 }
@@ -89,6 +112,47 @@ test("PayPal checkout fails closed on mismatched prices instead of creating bill
   assert.equal(route.calls.length,1);
   assert.equal(route.calls[0].options.method,undefined);
   assert.match(route.calls[0].url,/\/v1\/billing\/plans\/P-CONFIGURED$/);
+});
+
+test("PayPal checkout uses a stable provider request ID for duplicate retries",async()=>{
+  const validPlan={id:"P-CONFIGURED",status:"ACTIVE",billing_cycles:[{tenure_type:"REGULAR",frequency:{interval_unit:"MONTH",interval_count:1},pricing_scheme:{fixed_price:{currency_code:"EUR",value:"19.99"}}}]};
+  const first=paypalRoute({role:"user"},validPlan);
+  const second=paypalRoute({role:"user"},validPlan);
+  assert.equal((await first.post()).status,200);
+  assert.equal((await second.post()).status,200);
+  const firstRequest=first.calls.find(call=>call.options?.method==="POST");
+  const secondRequest=second.calls.find(call=>call.options?.method==="POST");
+  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],secondRequest.options.headers["PayPal-Request-Id"]);
+  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],billingIdempotencyKey("paypal","checkout","user"));
+  assert.ok(firstRequest.options.headers["PayPal-Request-Id"].length<=38);
+});
+
+test("Stripe checkout sends a stable idempotency key to its provider client",async()=>{
+  const source=readFileSync("app/api/stripe/checkout/route.ts","utf8");
+  const exports={};
+  let sentOptions;
+  const db={from(){const query={select(){return query;},eq(){return query;},async maybeSingle(){return {data:{role:"user",plan:"free"},error:null};}};return query;}};
+  runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
+    exports,process:{env:{}},URLSearchParams,
+    require(name){
+      if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
+      if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription};
+      if(name.endsWith("billing-idempotency"))return {billingIdempotencyKey};
+      if(name.endsWith("_shared"))return {admin:()=>db,userFrom:async()=>({id:"user"})};
+      if(name.endsWith("stripe-billing"))return {
+        stripeConfigured:()=>true,validatedPrice:async()=>"price_pro",PLAN_CENTS:{pro:1999,business:4999},
+        stripeRequest:async(_path,options)=>{sentOptions=options;return {id:"cs_test_mock",client_secret:"secret_mock",amount_total:1999,mode:"subscription"};},
+      };
+      throw Error("Unexpected import "+name);
+    },
+  });
+  const post=()=>exports.POST({json:async()=>({plan:"pro"})});
+  const firstResponse=await post();
+  assert.equal(firstResponse.status,200,JSON.stringify(firstResponse.body));
+  const firstKey=sentOptions.idempotencyKey;
+  assert.equal((await post()).status,200);
+  assert.equal(sentOptions.idempotencyKey,firstKey);
+  assert.equal(firstKey,billingIdempotencyKey("stripe","checkout","user"));
 });
 
 const crypto=await import("node:crypto");
