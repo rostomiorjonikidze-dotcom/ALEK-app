@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+type BrowserAuth = SupabaseClient["auth"];
+
 export const signupConfirmationMessage = "Si l’inscription peut être effectuée, un e-mail de confirmation sera envoyé. Vérifiez aussi les spams.";
 
 export function authErrorMessage(error: unknown): string {
@@ -25,10 +27,67 @@ export function passwordIsStrong(value: string): boolean {
 export const recoveryLinkMessage = "Ouvrez le lien de récupération reçu par e-mail dans le navigateur utilisé pour la demande, ou demandez un nouveau lien.";
 
 // The browser client exchanges PKCE codes during initialization; do not exchange twice.
-export async function initializeAuthSession(auth: Pick<SupabaseClient["auth"], "initialize" | "getSession">) {
+export async function initializeAuthSession(auth: Pick<BrowserAuth, "initialize" | "getSession">) {
   const initialized = await auth.initialize();
   if (initialized.error) throw initialized.error;
   const { data, error } = await auth.getSession();
   if (error) throw error;
   return data.session;
+}
+
+export function isAuthCallbackUrl(href: string): boolean {
+  const url = new URL(href);
+  const hash = new URLSearchParams(url.hash.slice(1));
+  return ["code", "token_hash", "error", "error_code", "error_description"].some((key) => url.searchParams.has(key))
+    || ["access_token", "error", "error_code", "error_description"].some((key) => hash.has(key));
+}
+
+export async function initializeRecoverySession(auth: Pick<BrowserAuth, "initialize" | "getSession">, href: string) {
+  const url = new URL(href);
+  const hash = new URLSearchParams(url.hash.slice(1));
+  const errorParams = [url.searchParams, hash];
+  if (errorParams.some((params) => ["error", "error_code", "error_description"].some((key) => params.has(key)))) {
+    throw new Error("expired token");
+  }
+  return initializeAuthSession(auth);
+}
+
+export async function registerWithEmailConfirmation(
+  auth: Pick<BrowserAuth, "signUp">,
+  credentials: Parameters<BrowserAuth["signUp"]>[0],
+) {
+  const { data, error } = await auth.signUp(credentials);
+  if (error) throw error;
+  return data.session;
+}
+
+export async function signInWithEmailAndPassword(
+  auth: Pick<BrowserAuth, "signInWithPassword">,
+  credentials: Parameters<BrowserAuth["signInWithPassword"]>[0],
+): Promise<void> {
+  const { error } = await auth.signInWithPassword(credentials);
+  if (error) throw error;
+}
+
+export async function requestPasswordRecovery(
+  auth: Pick<BrowserAuth, "resetPasswordForEmail">,
+  email: string,
+  redirectTo: string,
+  captchaToken?: string,
+): Promise<void> {
+  const { error } = await auth.resetPasswordForEmail(email, {
+    redirectTo,
+    ...(captchaToken ? { captchaToken } : {}),
+  });
+  if (error) throw error;
+}
+
+export async function updateAccountPassword(auth: Pick<BrowserAuth, "updateUser">, password: string): Promise<void> {
+  const { error } = await auth.updateUser({ password });
+  if (error) throw error;
+}
+
+export async function signOutUser(auth: Pick<BrowserAuth, "signOut">): Promise<void> {
+  const { error } = await auth.signOut();
+  if (error) throw error;
 }
