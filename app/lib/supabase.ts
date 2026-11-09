@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { observeAuthRecovery } from "./auth";
 
 let client: SupabaseClient | null = null;
 
@@ -20,7 +21,9 @@ export function getSupabase(): SupabaseClient {
     );
   }
 
-  client = createBrowserClient(url, key);
+  client = createBrowserClient(url, key, { auth: { skipAutoInitialize: true } });
+  observeAuthRecovery(client.auth);
+  void client.auth.initialize().catch(() => undefined);
   return client;
 }
 

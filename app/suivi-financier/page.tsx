@@ -54,8 +54,8 @@ export default function Finances(){
   if(!userId||busy)return;
   setBusy(d.id);setError("");
   try {
-   const {error:updateError}=await supabase.from("documents").update({invoice_status:paid?"paid":"pending"}).eq("id",d.id).eq("user_id",userId);
-   if(updateError){setError(userFacingError("payment-status"));return;}
+   const {data:updated,error:updateError}=await supabase.from("documents").update({invoice_status:paid?"paid":"pending"}).eq("id",d.id).eq("user_id",userId).eq("document_type","facture").select("id").maybeSingle();
+   if(updateError||!updated){setError(userFacingError("payment-status"));return;}
    await load(userId);
   } catch {
    setError(userFacingError("payment-status"));

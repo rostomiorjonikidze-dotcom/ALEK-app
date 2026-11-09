@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-import { authErrorMessage, initializeAuthSession, passwordIsStrong, recoveryLinkMessage } from "../lib/auth";
+import { authErrorMessage, initializeRecoverySession, passwordIsStrong, recoveryLinkMessage, updateAccountPassword } from "../lib/auth";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState("Vérification du lien de récupération…");
-  const [ready, setReady] = useState(false);
+  const [recoveryValidated, setRecoveryValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -19,24 +19,21 @@ export default function ResetPasswordPage() {
     let unsubscribe: (() => void) | undefined;
     void (async () => {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const hash = new URLSearchParams(window.location.hash.slice(1));
-        if (params.has("error") || hash.has("error")) throw new Error("expired token");
         const auth = supabase.auth;
         const { data: { subscription } } = auth.onAuthStateChange((event) => {
           if (active && event === "SIGNED_OUT") {
-            setReady(false);
+            setRecoveryValidated(false);
             setMessage(recoveryLinkMessage);
           }
         });
         unsubscribe = () => subscription.unsubscribe();
-        const session = await initializeAuthSession(auth);
+        const session = await initializeRecoverySession(auth, window.location.href);
         if (active) {
-          setReady(Boolean(session));
+          setRecoveryValidated(Boolean(session));
           setMessage(session ? "" : recoveryLinkMessage);
         }
       } catch (error) {
-        if (active) { setReady(false); setMessage(authErrorMessage(error)); }
+        if (active) { setRecoveryValidated(false); setMessage(authErrorMessage(error)); }
       }
     })();
     return () => { active = false; unsubscribe?.(); };
@@ -45,7 +42,7 @@ export default function ResetPasswordPage() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (loading || saved) return;
-    if (!ready) { setMessage(recoveryLinkMessage); return; }
+    if (!recoveryValidated) { setMessage(recoveryLinkMessage); return; }
     if (!passwordIsStrong(password)) {
       setMessage("10 caractères minimum, avec majuscule, minuscule, chiffre et symbole.");
       return;
@@ -53,8 +50,7 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { setMessage("Les mots de passe ne correspondent pas."); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) { setMessage(authErrorMessage(error)); return; }
+      await updateAccountPassword(supabase.auth, password);
       setSaved(true);
       setPassword("");
       setConfirm("");
@@ -71,12 +67,12 @@ export default function ResetPasswordPage() {
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>ALEK — Nouveau mot de passe</h1>
         {!saved && <>
           <label htmlFor="new-password">Nouveau mot de passe</label>
-          <input id="new-password" type={visible ? "text" : "password"} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={10} disabled={!ready || loading} aria-describedby="password-help" style={inputStyle} />
+          <input id="new-password" type={visible ? "text" : "password"} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} required minLength={10} disabled={!recoveryValidated || loading} aria-describedby="password-help" style={inputStyle} />
           <p id="password-help">10 caractères minimum, avec majuscule, minuscule, chiffre et symbole.</p>
           <label htmlFor="confirm-password">Confirmer le mot de passe</label>
-          <input id="confirm-password" type={visible ? "text" : "password"} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required disabled={!ready || loading} style={inputStyle} />
+          <input id="confirm-password" type={visible ? "text" : "password"} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} required disabled={!recoveryValidated || loading} style={inputStyle} />
           <label><input type="checkbox" checked={visible} onChange={e => setVisible(e.target.checked)} /> Afficher le mot de passe</label>
-          <button disabled={loading || !ready} style={{ background: "#1677ff", color: "white", padding: 12, borderRadius: 8 }}>{loading ? "Veuillez patienter..." : "Enregistrer le mot de passe"}</button>
+          <button disabled={loading || !recoveryValidated} style={{ background: "#1677ff", color: "white", padding: 12, borderRadius: 8 }}>{loading ? "Veuillez patienter..." : "Enregistrer le mot de passe"}</button>
         </>}
         {message && <p role="status">{message}</p>}
         {saved ? <Link href="/dashboard">Accéder à mon espace</Link> : <Link href="/login">Retour à la connexion</Link>}
