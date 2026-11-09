@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
-import { authErrorMessage, initializeAuthSession, passwordIsStrong, recoveryLinkMessage } from "../lib/auth";
+import { authErrorMessage, initializeRecoverySession, passwordIsStrong, recoveryLinkMessage, updateAccountPassword } from "../lib/auth";
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("");
@@ -19,9 +19,6 @@ export default function ResetPasswordPage() {
     let unsubscribe: (() => void) | undefined;
     void (async () => {
       try {
-        const params = new URLSearchParams(window.location.search);
-        const hash = new URLSearchParams(window.location.hash.slice(1));
-        if (params.has("error") || hash.has("error")) throw new Error("expired token");
         const auth = supabase.auth;
         const { data: { subscription } } = auth.onAuthStateChange((event) => {
           if (active && event === "SIGNED_OUT") {
@@ -30,7 +27,7 @@ export default function ResetPasswordPage() {
           }
         });
         unsubscribe = () => subscription.unsubscribe();
-        const session = await initializeAuthSession(auth);
+        const session = await initializeRecoverySession(auth, window.location.href);
         if (active) {
           setReady(Boolean(session));
           setMessage(session ? "" : recoveryLinkMessage);
@@ -53,8 +50,7 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { setMessage("Les mots de passe ne correspondent pas."); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) { setMessage(authErrorMessage(error)); return; }
+      await updateAccountPassword(supabase.auth, password);
       setSaved(true);
       setPassword("");
       setConfirm("");

@@ -61,6 +61,7 @@ export function tierFromPrice(id:string):Tier|null {
 }
 export type StripeSubscription = {
   id:string; status:string; customer:string; metadata?:{user_id?:string;plan?:string};
+  current_period_end?:number|null; cancel_at_period_end?:boolean;
   items?:{data?:Array<{price?:{id?:string}|string}>};
   latest_invoice?:{paid?:boolean; status?:string}|string|null;
 };
