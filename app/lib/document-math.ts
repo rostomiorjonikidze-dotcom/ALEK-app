@@ -24,10 +24,17 @@ export function documentTotals(lines: PriceLine[], vatRate: number) {
   return { totalHT, totalVAT, totalTTC: roundMoney(totalHT + totalVAT) };
 }
 
-export function validDocumentDates(issue: string, due: string): boolean {
-  const valid = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date)
+export function validVatRate(vatRate: number): boolean {
+  return Number.isFinite(vatRate) && vatRate >= 0 && vatRate <= 100;
+}
+
+export function validISODate(date: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)
     && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
-  return valid(issue) && valid(due) && due >= issue;
+}
+
+export function validDocumentDates(issue: string, due: string): boolean {
+  return validISODate(issue) && validISODate(due) && due >= issue;
 }
 
 export function serviceTotal(item: PriceLine): number {
