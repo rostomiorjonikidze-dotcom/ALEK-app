@@ -71,3 +71,13 @@ test('signed proof is available only within the bearer-link lifetime',async()=>{
  const r=route({...pending(),status:'signed',signer_name:'Client Test'});
  assert.equal((await r.exports.GET(null,params)).status,200);
 });
+
+test('signature listing requires a session and filters the service query by the current owner', async () => {
+ const anonymous=route(null,{path:'',user:null});
+ assert.equal((await anonymous.exports.GET(request({user_id:'other'}))).status,401);
+ assert.equal(anonymous.calls.length,0);
+ const owner=route(null,{path:'',user:{id:'account-a'}});
+ assert.equal((await owner.exports.GET(request({user_id:'account-b'}))).status,200);
+ assert.ok(owner.calls.some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]==='account-a'));
+ assert.ok(!owner.calls.some(c=>c.includes('account-b')));
+});
