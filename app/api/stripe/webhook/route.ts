@@ -29,7 +29,7 @@ export async function POST(request:Request){
   try{event=JSON.parse(raw) as StripeEvent;}catch{
     return NextResponse.json({error:"Événement invalide."},{status:400});
   }
-  if(!event.type || !event.data?.object)return NextResponse.json({error:"Événement incomplet."},{status:400});
+  if(!event || typeof event!=="object" || !event.type || !event.data?.object)return NextResponse.json({error:"Événement incomplet."},{status:400});
   let subscriptionId:string|null=null;
   if(event.type==="checkout.session.completed" || event.type==="checkout.session.async_payment_succeeded"){
     const obj=event.data.object;

@@ -32,21 +32,17 @@ jobs:
       - name: Build
         run: npm run build
 
-  public-smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out source
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-      - name: Run French compliance and pricing regression tests
+      - name: Unit and regression tests
         run: npm test
-      - name: Verify live public pages and AI auth gate
+      - name: Verify this production build locally (no live services)
         env:
-          ALEK_BASE_URL: https://app.alek.best
-        run: node --test tests/public-smoke.test.mjs
+          ALEK_BASE_URL: http://127.0.0.1:3000
+        run: |
+          npm start > /tmp/alek-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$ALEK_BASE_URL" > /dev/null; then break; fi
+            sleep 1
+          done
+          node --test tests/public-smoke.test.mjs

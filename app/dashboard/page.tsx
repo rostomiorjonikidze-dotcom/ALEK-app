@@ -11,7 +11,7 @@ import InstallApp from "../components/InstallApp";
 import {paymentClauses} from "../lib/pro-compliance";
 import { NotoSansBase64 } from "../lib/notosans-font";
 import { NotoSansGeorgianBase64 } from "../lib/notosansgeorgian-font";
-import { serviceTotal, inferUnitPrices } from "../lib/document-math";
+import { serviceTotal, inferUnitPrices, documentTotals, validPriceLine, validDocumentDates } from "../lib/document-math";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -155,7 +155,7 @@ const translations = {
     plans: "Abonnements",
     free: "Gratuit",
     pro: "Pro",
-    business: "Business",
+    business: "Avancé",
     paymentSoon: "Paiement en ligne bientôt disponible",
   },
 } as const;
@@ -180,7 +180,7 @@ function normalizeService(raw: any): ServiceItem {
   const rawPriceType = String(raw?.priceType || "total").toLowerCase();
   const hourlyText = /\b(heure|heures|horaire|hour|hours|stunde|stunden|час|часа|часов)\b|\/h\b/i.test(description);
   const priceType: PriceType =
-    rawPriceType === "hourly" || hourlyText
+    rawPriceType === "hourly" || (!raw?.priceType && hourlyText)
       ? "hourly"
       : rawPriceType === "unit"
         ? "unit"
@@ -188,11 +188,11 @@ function normalizeService(raw: any): ServiceItem {
 
   return {
     description,
-    quantity: Number(raw?.quantity) || 1,
-    price: Number(raw?.price) || 0,
+    quantity: Number(raw?.quantity ?? 1),
+    price: Number(raw?.price ?? 0),
     type: rawType === "material" ? "material" : "labor",
     priceType,
-    hours: Number(raw?.hours) || (priceType === "hourly" ? Number(raw?.quantity) || 1 : 1),
+    hours: Number(raw?.hours ?? (priceType === "hourly" ? raw?.quantity ?? 1 : 1)),
   };
 }
 
@@ -264,9 +264,7 @@ export default function Home() {
     [services],
   );
 
-  const totalHT = materialFromServices + laborFromServices;
-  const vatAmount = totalHT * (vatRate / 100);
-  const totalTTC = totalHT + vatAmount;
+  const { totalHT, totalVAT: vatAmount, totalTTC } = documentTotals(services, vatRate);
   const hasUnlimitedAi = userRole === "owner" || plan === "business";
   const limit = hasUnlimitedAi ? Infinity : PLAN_LIMITS[plan];
   const remaining = hasUnlimitedAi ? Infinity : Math.max(limit - usageCount, 0);
@@ -312,6 +310,8 @@ export default function Home() {
         setPaymentMethod(draft.paymentMethod || "");
         setInvoiceStatus(draft.invoiceStatus || "unpaid");
         setVatRate(Number(draft.vatRate) || 0);
+        setVatExemptionConfirmed(Boolean(draft.vatExemptionConfirmed));
+        setClientIsProfessional(Boolean(draft.clientIsProfessional));
       } else {
         setDevisNumber("");
         setDevisDate(todayInput());
@@ -355,6 +355,8 @@ export default function Home() {
         paymentMethod,
         invoiceStatus,
         vatRate,
+        vatExemptionConfirmed,
+        clientIsProfessional,
       }),
     );
   }, [
@@ -385,6 +387,8 @@ export default function Home() {
     paymentMethod,
     invoiceStatus,
     vatRate,
+    vatExemptionConfirmed,
+    clientIsProfessional,
   ]);
 
   useEffect(() => {
@@ -500,6 +504,7 @@ export default function Home() {
     setClientAddress("");
     setClientPhone("");
     setClientEmail("");
+    setClientIsProfessional(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -522,6 +527,7 @@ export default function Home() {
     setClientAddress("");
     setClientPhone("");
     setClientEmail("");
+    setClientIsProfessional(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -689,7 +695,7 @@ export default function Home() {
       alert(t.saveSuccess);
     } catch (error) {
       console.error("Document save failed:", error);
-      alert("Enregistrement impossible. Aucun numéro de document n'a été attribué. Réessayez.");
+      alert("Enregistrement impossible. Vérifiez l’historique avant de réessayer.");
     } finally {
       setSavingDocument(false);
     }
@@ -739,7 +745,7 @@ export default function Home() {
     if (!authData.user) { alert(t.loginRequired); return; }
     const { error } = await supabase.from("documents").delete().eq("id", id).eq("user_id", authData.user.id);
     if (error) {
-      alert(error.message);
+      alert("Impossible de supprimer le document. Réessayez ultérieurement.");
       return;
     }
     if (selectedDocumentId === id) setSelectedDocumentId(null);
@@ -769,9 +775,19 @@ export default function Home() {
       alert("La franchise en base de TVA nécessite un taux à 0 %.");
       return false;
     }
-    if (!services.length || services.some(item => !item.description.trim() || !Number.isFinite(item.price) || item.price < 0)) {
+    if (!services.length || services.some(item => !item.description.trim() || !validPriceLine(item))) {
       alert("Ajoutez au moins une prestation avec une description et un prix valide.");
       scrollToSection("services-section");
+      return false;
+    }
+    const issue = documentType === "facture" ? invoiceDate : devisDate;
+    const due = documentType === "facture" ? invoiceDueDate : validUntil;
+    if (!validDocumentDates(issue, due)) {
+      alert("Renseignez des dates valides : l’échéance ou la fin de validité ne peut pas précéder la date du document.");
+      return false;
+    }
+    if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100 || !Number.isFinite(totalTTC)) {
+      alert("Vérifiez le taux de TVA et les montants du document.");
       return false;
     }
     if (requireNumber && !(documentType === "facture" ? invoiceNumber : devisNumber).trim()) {
@@ -863,27 +879,34 @@ export default function Home() {
     doc.text(`${documentType === "facture" ? "Échéance" : "Valable jusqu'au"} : ${safe(due)}`, left, 53);
     if (documentType === "facture" && devisReference) doc.text(`Référence devis : ${safe(devisReference)}`, left, 60);
 
-    doc.setFillColor(245, 248, 253);
-    doc.roundedRect(left, 66, 84, 55, 2, 2, "F");
-    doc.roundedRect(108, 66, 84, 55, 2, 2, "F");
     doc.setFontSize(9);
+    const companyLines = [businessAddress, businessPhone, businessEmail, `SIREN / SIRET : ${safe(businessSiret)}`];
+    const clientLines = [clientAddress, clientPhone, clientEmail];
+    const blockHeight = (name: string, lines: string[]) => 18 + wrapMixed(safe(name), 75).length * 5
+      + lines.reduce((height, line) => height + wrapMixed(safe(line), 75).length * 4.5, 0);
+    const identityHeight = Math.max(55, blockHeight(businessName, companyLines), blockHeight(clientName, clientLines));
+    if (identityHeight > pageHeight - 100) {
+      alert("Les coordonnées sont trop longues pour le PDF. Raccourcissez-les sans supprimer les informations nécessaires.");
+      return;
+    }
+    doc.setFillColor(245, 248, 253);
+    doc.roundedRect(left, 66, 84, identityHeight, 2, 2, "F");
+    doc.roundedRect(108, 66, 84, identityHeight, 2, 2, "F");
     let companyY = textBlock("ÉMETTEUR", businessName, left + 4, 73, 75);
-    for (const line of [businessAddress, businessPhone, businessEmail, `SIRET : ${safe(businessSiret)}`]) {
-      if (companyY > 115) break;
+    for (const line of companyLines) {
       const wrapped = wrapMixed(safe(line), 75);
       wrapped.forEach((part, index) => drawMixed(part, left + 4, companyY + index * 4.5));
       companyY += wrapped.length * 4.5;
     }
     let clientY = textBlock("CLIENT", clientName, 112, 73, 75);
-    for (const line of [clientAddress, clientPhone, clientEmail]) {
-      if (clientY > 115) break;
+    for (const line of clientLines) {
       const wrapped = wrapMixed(safe(line), 75);
       wrapped.forEach((part, index) => drawMixed(part, 112, clientY + index * 4.5));
       clientY += wrapped.length * 4.5;
     }
 
     const descriptionLines = wrapMixed(safe(frenchText), 174);
-    let descriptionY = 133;
+    let descriptionY = 78 + identityHeight;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.text("Description des travaux", left, descriptionY);
@@ -943,14 +966,20 @@ export default function Home() {
       ? [paymentTerms && `Conditions de paiement : ${paymentTerms}`, paymentMethod && `Mode de paiement : ${paymentMethod}`, `Statut : ${invoiceStatus === "paid" ? "Payée" : invoiceStatus === "pending" ? "En attente" : "Non payée"}`].filter(Boolean) as string[]
       : [];
     if(documentType==="facture"){
-      details.push(...paymentClauses(clientIsProfessional?"professionnel":"particulier",30,vatExemptionConfirmed));
+      details.push(...paymentClauses(clientIsProfessional?"professionnel":"particulier",30,vatExemptionConfirmed).slice(1));
       // The 40 EUR clause above already includes its legal reference.
+    }
+    if (documentType === "devis" && vatExemptionConfirmed) {
+      details.push("TVA non applicable, article 293 B du CGI.");
     }
     for (const detail of details) {
       const lines = wrapMixed(detail, 170);
-      if (y + lines.length * 5 > pageHeight - 22) { doc.addPage(); y = 24; }
-      lines.forEach((line, index) => drawMixed(line, left, y + index * 5));
-      y += lines.length * 5 + 2;
+      for (const line of lines) {
+        if (y > pageHeight - 22) { doc.addPage(); y = 24; }
+        drawMixed(line, left, y);
+        y += 5;
+      }
+      y += 2;
     }
     const pageCount = doc.getNumberOfPages();
     for (let page = 1; page <= pageCount; page++) {
@@ -1020,9 +1049,9 @@ export default function Home() {
             </div>
             <div className="mt-6 flex flex-col items-center gap-5 rounded-2xl border border-slate-100 bg-white p-5 sm:flex-row"><div role="img" aria-label={`Répartition : ${quoteDocs.length} devis et ${invoiceDocs.length} factures`} className="relative grid size-32 shrink-0 place-items-center rounded-full" style={{background: savedDocuments.length ? `conic-gradient(#2563eb 0% ${quoteDocs.length / savedDocuments.length * 100}%, #6366f1 ${quoteDocs.length / savedDocuments.length * 100}% 100%)` : "#e2e8f0"}}><div className="grid size-24 place-items-center rounded-full bg-white text-center"><div><strong className="block text-2xl font-black text-slate-900">{savedDocuments.length}</strong><span className="text-[10px] font-semibold text-slate-500">documents</span></div></div></div><div className="min-w-0 flex-1"><h3 className="font-black text-[#14213b]">Répartition des documents</h3><p className="mt-1 text-xs text-slate-500">Calculée sur vos documents enregistrés</p><div className="mt-4 grid gap-2 text-sm"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-blue-600" />Devis</span><strong>{quoteDocs.length}</strong></div><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2"><span className="size-2.5 rounded-full bg-indigo-500" />Factures</span><strong>{invoiceDocs.length}</strong></div></div></div></div><div className="mt-6 flex flex-wrap gap-3 text-xs text-slate-500"><span>Les indicateurs reflètent uniquement vos documents enregistrés.</span><button type="button" onClick={openHistory} className="font-bold text-blue-700 hover:underline">Consulter l’historique →</button></div>
           </div>
-          <div className="rounded-3xl bg-[#101c34] p-6 text-white shadow-[0_16px_35px_rgba(16,28,52,.14)] sm:p-7"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-300">Accès rapide</p><h2 className="mt-3 text-2xl font-black">Votre prochain document</h2><p className="mt-3 text-sm leading-6 text-slate-300">Créez un devis ou une facture, complétez les informations et visualisez le résultat avant export.</p><div className="mt-6 grid gap-3"><button type="button" onClick={()=>{setDocumentType("devis");scrollToSection("document-section")}} className="rounded-xl bg-blue-600 px-5 py-3 text-left text-sm font-bold text-white hover:bg-blue-500">＋ Nouveau devis</button><button type="button" onClick={()=>{setDocumentType("facture");scrollToSection("document-section")}} className="rounded-xl border border-white/25 px-5 py-3 text-left text-sm font-bold text-white hover:bg-white/10">＋ Nouvelle facture</button></div></div>
+          <div className="rounded-3xl bg-[#101c34] p-6 text-white shadow-[0_16px_35px_rgba(16,28,52,.14)] sm:p-7"><p className="text-xs font-bold uppercase tracking-[.16em] text-blue-300">Accès rapide</p><h2 className="mt-3 text-2xl font-black">Votre prochain document</h2><p className="mt-3 text-sm leading-6 text-slate-300">Créez un devis ou une facture, complétez les informations et visualisez le résultat avant export.</p><div className="mt-6 grid gap-3"><button type="button" onClick={()=>{createNewDevis();scrollToSection("document-section")}} className="rounded-xl bg-blue-600 px-5 py-3 text-left text-sm font-bold text-white hover:bg-blue-500">＋ Nouveau devis</button><button type="button" onClick={()=>{createNewInvoice();scrollToSection("document-section")}} className="rounded-xl border border-white/25 px-5 py-3 text-left text-sm font-bold text-white hover:bg-white/10">＋ Nouvelle facture</button></div></div>
         </section>
-        <div className="mb-6 grid gap-5 xl:grid-cols-[1.6fr_1fr]"><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h2 className="text-lg font-black">Derniers documents</h2><button type="button" onClick={openHistory} className="text-sm font-bold text-blue-600 hover:underline">Voir tout</button></div><div className="mt-4"><label htmlFor="dashboard-search" className="sr-only">Rechercher un document récent</label><input id="dashboard-search" type="search" value={dashboardSearch} onChange={event=>setDashboardSearch(event.target.value)} placeholder="Rechercher un client ou numéro…" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" /></div><div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrer les documents">{([{key:"all",label:"Tous"},{key:"devis",label:"Devis"},{key:"paid",label:"Payées"},{key:"unpaid",label:"À encaisser"}] as const).map(option=><button type="button" key={option.key} onClick={()=>setDocumentStatusFilter(option.key)} aria-pressed={documentStatusFilter===option.key} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${documentStatusFilter===option.key?"bg-blue-600 text-white":"bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}>{option.label}</button>)}</div><div className="mt-4 overflow-x-auto rounded-xl border border-slate-100"><table className="w-full min-w-[540px] text-left text-sm"><thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th scope="col" className="px-4 py-3">Client</th><th scope="col" className="px-4 py-3">Document</th><th scope="col" className="px-4 py-3">Statut</th><th scope="col" className="px-4 py-3 text-right">Montant TTC</th></tr></thead><tbody className="divide-y divide-slate-100">{savedDocuments.filter(d=>(documentStatusFilter==="all" || (documentStatusFilter==="devis" ? d.document_type==="devis" : d.document_type==="facture" && (documentStatusFilter==="paid" ? d.invoice_status==="paid" : d.invoice_status!=="paid"))) && `${d.client_name||""} ${d.document_number||""} ${d.document_type||""}`.toLocaleLowerCase("fr").includes(dashboardSearch.trim().toLocaleLowerCase("fr"))).slice(0,6).map(d=><tr key={d.id} className="transition hover:bg-blue-50/50"><td className="max-w-36 truncate px-4 py-3 font-semibold text-slate-800">{d.client_name||"Client non renseigné"}</td><td className="px-4 py-3"><span className="block font-medium">{d.document_type === "facture"?"Facture":"Devis"}</span><span className="text-xs text-slate-500">{d.document_number||"Sans numéro"}</span></td><td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${d.document_type==="devis"?"bg-blue-50 text-blue-700":d.invoice_status==="paid"?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700"}`}>{d.document_type==="devis"?"Devis":d.invoice_status==="paid"?"Payée":d.invoice_status==="pending"?"En attente":"À encaisser"}</span></td><td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-slate-900">{money(Number(d.total_ttc)||0)}</td></tr>)}</tbody></table>{!savedDocuments.some(d=>`${d.client_name||""} ${d.document_number||""} ${d.document_type||""}`.toLocaleLowerCase("fr").includes(dashboardSearch.trim().toLocaleLowerCase("fr")))&&<p className="px-4 py-6 text-center text-sm text-slate-500">Aucun document correspondant. Modifiez votre recherche ou créez un document.</p>}</div></section><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Actions rapides</h2><div className="mt-4 grid gap-2">{[{label:"＋ Créer un devis",action:()=>{setDocumentType("devis");scrollToSection("document-section")}},{label:"＋ Créer une facture",action:()=>{setDocumentType("facture");scrollToSection("document-section")}},{label:"◷ Historique des documents",action:openHistory},{label:"⚙ Paramètres",action:()=>scrollToSection("settings-section")}].map(item=><button key={item.label} type="button" onClick={item.action} className="rounded-xl border border-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50">{item.label} <span className="float-right text-blue-600">›</span></button>)}</div></section></div>
+        <div className="mb-6 grid gap-5 xl:grid-cols-[1.6fr_1fr]"><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between gap-2"><h2 className="text-lg font-black">Derniers documents</h2><button type="button" onClick={openHistory} className="text-sm font-bold text-blue-600 hover:underline">Voir tout</button></div><div className="mt-4"><label htmlFor="dashboard-search" className="sr-only">Rechercher un document récent</label><input id="dashboard-search" type="search" value={dashboardSearch} onChange={event=>setDashboardSearch(event.target.value)} placeholder="Rechercher un client ou numéro…" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" /></div><div className="mt-3 flex flex-wrap gap-2" aria-label="Filtrer les documents">{([{key:"all",label:"Tous"},{key:"devis",label:"Devis"},{key:"paid",label:"Payées"},{key:"unpaid",label:"À encaisser"}] as const).map(option=><button type="button" key={option.key} onClick={()=>setDocumentStatusFilter(option.key)} aria-pressed={documentStatusFilter===option.key} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${documentStatusFilter===option.key?"bg-blue-600 text-white":"bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700"}`}>{option.label}</button>)}</div><div className="mt-4 overflow-x-auto rounded-xl border border-slate-100"><table className="w-full min-w-[540px] text-left text-sm"><thead className="bg-slate-50 text-xs font-bold uppercase tracking-wide text-slate-500"><tr><th scope="col" className="px-4 py-3">Client</th><th scope="col" className="px-4 py-3">Document</th><th scope="col" className="px-4 py-3">Statut</th><th scope="col" className="px-4 py-3 text-right">Montant TTC</th></tr></thead><tbody className="divide-y divide-slate-100">{savedDocuments.filter(d=>(documentStatusFilter==="all" || (documentStatusFilter==="devis" ? d.document_type==="devis" : d.document_type==="facture" && (documentStatusFilter==="paid" ? d.invoice_status==="paid" : d.invoice_status!=="paid"))) && `${d.client_name||""} ${d.document_number||""} ${d.document_type||""}`.toLocaleLowerCase("fr").includes(dashboardSearch.trim().toLocaleLowerCase("fr"))).slice(0,6).map(d=><tr key={d.id} className="transition hover:bg-blue-50/50"><td className="max-w-36 truncate px-4 py-3 font-semibold text-slate-800">{d.client_name||"Client non renseigné"}</td><td className="px-4 py-3"><span className="block font-medium">{d.document_type === "facture"?"Facture":"Devis"}</span><span className="text-xs text-slate-500">{d.document_number||"Sans numéro"}</span></td><td className="px-4 py-3"><span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ${d.document_type==="devis"?"bg-blue-50 text-blue-700":d.invoice_status==="paid"?"bg-emerald-50 text-emerald-700":"bg-amber-50 text-amber-700"}`}>{d.document_type==="devis"?"Devis":d.invoice_status==="paid"?"Payée":d.invoice_status==="pending"?"En attente":"À encaisser"}</span></td><td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-slate-900">{money(Number(d.total_ttc)||0)}</td></tr>)}</tbody></table>{!savedDocuments.some(d=>`${d.client_name||""} ${d.document_number||""} ${d.document_type||""}`.toLocaleLowerCase("fr").includes(dashboardSearch.trim().toLocaleLowerCase("fr")))&&<p className="px-4 py-6 text-center text-sm text-slate-500">Aucun document correspondant. Modifiez votre recherche ou créez un document.</p>}</div></section><section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-black">Actions rapides</h2><div className="mt-4 grid gap-2">{[{label:"＋ Créer un devis",action:()=>{createNewDevis();scrollToSection("document-section")}},{label:"＋ Créer une facture",action:()=>{createNewInvoice();scrollToSection("document-section")}},{label:"◷ Historique des documents",action:openHistory},{label:"⚙ Paramètres",action:()=>scrollToSection("settings-section")}].map(item=><button key={item.label} type="button" onClick={item.action} className="rounded-xl border border-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:border-blue-200 hover:bg-blue-50">{item.label} <span className="float-right text-blue-600">›</span></button>)}</div></section></div>
         <div role="status" className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Facturation électronique 2026–2027 :</strong> les factures PDF classiques ne remplacent pas les factures électroniques réglementaires. Pour les échanges B2B concernés, une plateforme agréée est nécessaire. Vérifiez les mentions obligatoires avant émission.</div>
         {mobileMenuOpen && <button type="button" aria-label="Fermer le menu" onClick={()=>setMobileMenuOpen(false)} className="fixed inset-0 z-40 bg-[#06142b]/60 lg:hidden" />}
         <aside className={`fixed bottom-0 left-0 top-0 z-50 w-[252px] overflow-y-auto bg-[#071a3b] p-5 text-white shadow-[12px_0_38px_rgba(7,26,59,.12)] transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
@@ -1037,8 +1066,8 @@ export default function Home() {
           <nav onClick={()=>setMobileMenuOpen(false)} className="space-y-1"><p className="mb-3 px-4 text-[10px] font-bold uppercase tracking-[.2em] text-blue-300/70">MENU PRINCIPAL</p>
             <button type="button" onClick={() => { setShowHistory(false); window.scrollTo({ top: 0, behavior: "smooth" }); }} className={`${navButton} bg-blue-600 text-white hover:bg-blue-500`}>🏠 {t.navHome}</button>
             <button type="button" onClick={() => scrollToSection("client-section")} className={navButton}>👥 {t.navClients}</button>
-            <button type="button" onClick={() => { setDocumentType("devis"); scrollToSection("document-section"); }} className={navButton}>📄 {t.navDevis}</button>
-            <button type="button" onClick={() => { setDocumentType("facture"); scrollToSection("document-section"); }} className={navButton}>🧾 {t.navFactures}</button>
+            <button type="button" onClick={() => { createNewDevis(); scrollToSection("document-section"); }} className={navButton}>📄 {t.navDevis}</button>
+            <button type="button" onClick={() => { createNewInvoice(); scrollToSection("document-section"); }} className={navButton}>🧾 {t.navFactures}</button>
             <button type="button" onClick={openHistory} className={navButton}>🕘 {t.navHistory}</button>
             <button type="button" onClick={() => scrollToSection("services-section")} className={navButton}>🛠️ {t.navServices}</button>
             <button type="button" onClick={() => scrollToSection("settings-section")} className={navButton}>⚙️ {t.navSettings}</button>
@@ -1149,7 +1178,7 @@ export default function Home() {
 
           <section className="rounded-[28px] border border-[#dce6f5] bg-white p-7 shadow-[0_18px_55px_rgba(15,42,85,.08)]">
             <h2 className="text-center text-2xl font-bold">{t.plans}</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} AI / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Payer par carte bancaire →</a>}</div>)}</div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">{(["free", "pro", "business"] as Plan[]).map((p) => <div key={p} className={`rounded-2xl border p-5 transition ${p === "pro" ? "border-blue-400 bg-gradient-to-b from-blue-50 to-white shadow-[0_12px_30px_rgba(37,99,235,0.12)] ring-1 ring-blue-300" : "border-slate-200 bg-white"}`}><h3 className="text-xl font-bold">{p === "free" ? t.free : p === "pro" ? t.pro : t.business}</h3><p className="mt-2 text-3xl font-black">{p === "free" ? "0 €" : p === "pro" ? "19,99 €" : "49,99 €"}</p><p className="mt-3 text-sm text-stone-500">{p === "business" ? t.unlimited : `${PLAN_LIMITS[p]} utilisations de l’IA / mois`}</p>{p === "free" ? <span className="mt-5 block rounded-xl border border-slate-200 bg-[#f8fbff] p-3 text-center text-sm font-semibold text-stone-500">{t.free}</span> : <a href={`/pricing?plan=${p}`} className="mt-5 block w-full rounded-xl bg-blue-600 p-3 text-center text-sm font-semibold text-white hover:bg-blue-700">Payer par carte bancaire →</a>}</div>)}</div>
           </section>
 
           <footer className="pb-4 pt-2 text-center text-sm text-stone-500">
@@ -1166,7 +1195,7 @@ export default function Home() {
           </footer>
         </div>
       </div>
-      <nav aria-label="Navigation mobile" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_35px_rgba(15,23,42,.1)] backdrop-blur lg:hidden"><button type="button" onClick={()=>{setShowHistory(false);window.scrollTo({top:0,behavior:"smooth"})}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-blue-700"><span className="text-xl">⌂</span>Accueil</button><button type="button" onClick={()=>{setDocumentType("devis");scrollToSection("document-section")}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">▤</span>Devis</button><button type="button" onClick={()=>{setDocumentType("facture");scrollToSection("document-section")}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">▣</span>Factures</button><button type="button" onClick={openHistory} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">◷</span>Historique</button></nav>
+      <nav aria-label="Navigation mobile" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-slate-200 bg-white/95 px-2 pb-[max(8px,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_35px_rgba(15,23,42,.1)] backdrop-blur lg:hidden"><button type="button" onClick={()=>{setShowHistory(false);window.scrollTo({top:0,behavior:"smooth"})}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-blue-700"><span className="text-xl">⌂</span>Accueil</button><button type="button" onClick={()=>{createNewDevis();scrollToSection("document-section")}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">▤</span>Devis</button><button type="button" onClick={()=>{createNewInvoice();scrollToSection("document-section")}} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">▣</span>Factures</button><button type="button" onClick={openHistory} className="flex flex-col items-center gap-1 py-2 text-xs font-semibold text-slate-600"><span className="text-xl">◷</span>Historique</button></nav>
     </main>
   );
 } 

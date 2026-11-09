@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { findExactCompany } from "../../lib/company-match";
 
 export async function GET(request: NextRequest) {
   const identifier = (request.nextUrl.searchParams.get("identifier") || "").replace(/\D/g, "");
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
       next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
@@ -21,15 +23,7 @@ export async function GET(request: NextRequest) {
     const payload = await response.json();
     const results = Array.isArray(payload?.results) ? payload.results : [];
 
-    type CompanyRecord = {siren?:string; siege?:{siret?:string;nom_commercial?:string}; matching_etablissements?:Array<{siret?:string}>; [key:string]:unknown};
-    const company =
-      results.find((item: CompanyRecord) => {
-        if (identifier.length === 9) return String(item?.siren || "") === identifier;
-        if (String(item?.siege?.siret || "") === identifier) return true;
-        return Array.isArray(item?.matching_etablissements)
-          ? item.matching_etablissements.some((e: {siret?:string}) => String(e?.siret || "") === identifier)
-          : false;
-      }) || results[0];
+    const company = findExactCompany(results, identifier);
 
     if (!company) {
       return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
