@@ -1,3 +1,4 @@
+import { readJsonObject, RequestBodyError } from "../../../lib/request-body";
 import { createHash, createHmac } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { admin } from "../../paypal/_shared";
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (row.status !== "pending") return NextResponse.json({ error: "Cette demande est déjà traitée." }, { status: 409 });
     if (signatureLinkExpired(row.expires_at)) return NextResponse.json({ error: "Lien expiré." }, { status: 410 });
     if (row.snapshot_sha256 !== sha(stable(row.document_snapshot))) return NextResponse.json({ error: "Document modifié." }, { status: 409 });
-    const body = await request.json();
+    const body = await readJsonObject(request, 175_000);
     const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
     const signature = typeof body?.signature === "string" ? body.signature : "";
     const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(signature);
@@ -62,7 +63,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (error) return NextResponse.json({ error: "Enregistrement impossible." }, { status: 503 });
     if (!updated) return NextResponse.json({ error: "Cette demande a déjà été traitée ou a expiré." }, { status: 409 });
     return NextResponse.json({ status: "signed", signedAt, signatureHash: proof, snapshotHash: row.snapshot_sha256 }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (error) {
+    if (error instanceof RequestBodyError) return NextResponse.json({ error: error.message }, { status: error.status });
     return NextResponse.json({ error: "Signature impossible." }, { status: 500 });
   }
 }
