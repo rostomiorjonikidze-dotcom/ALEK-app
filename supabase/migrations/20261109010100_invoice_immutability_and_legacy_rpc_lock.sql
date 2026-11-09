@@ -189,6 +189,12 @@ BEGIN
     EXECUTE format('REVOKE ALL ON FUNCTION public.issue_artisan_document_v2(jsonb) FROM %I', v_existing_role.rolname);
   END LOOP;
 
+  -- Explicit internal EXECUTE is needed: revoking the legacy RPC grants
+  -- also revokes the owner's implicit ACL entry after the owner transition.
+  -- Only the isolated NOLOGIN issuer may chain v3 → v2 → v1.
+  GRANT EXECUTE ON FUNCTION public.issue_artisan_document(jsonb) TO alek_invoice_issuer;
+  GRANT EXECUTE ON FUNCTION public.issue_artisan_document_v2(jsonb) TO alek_invoice_issuer;
+
   -- Finish ACL changes before moving ownership away from the migration role.
   ALTER FUNCTION public.issue_artisan_document(jsonb) OWNER TO alek_invoice_issuer;
   ALTER FUNCTION public.issue_artisan_document_v2(jsonb) OWNER TO alek_invoice_issuer;
