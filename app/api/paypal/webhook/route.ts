@@ -1,5 +1,5 @@
 import {NextResponse} from "next/server";
-import {planAfterPaypalSync, remainingPlan} from "../../../lib/payment-policy";
+import {reconcilePaypalSubscription} from "../../../lib/billing-paypal";
 import {readJsonObject,RequestBodyError} from "../../../lib/request-body";
 import {admin, paypalBase, paypalToken, subscription} from "../_shared";
 
@@ -18,7 +18,7 @@ const SUBSCRIPTION_EVENTS=new Set([
   "PAYMENT.SALE.REVERSED",
 ]);
 
-type PaypalEvent={id?:unknown;event_type?:unknown;resource?:Record<string,unknown>};
+type PaypalEvent={id?:unknown;event_type?:unknown;create_time?:unknown;resource?:Record<string,unknown>};
 
 function subscriptionIdFor(event:PaypalEvent):string|null{
   const type=String(event.event_type||"");
@@ -80,6 +80,8 @@ export async function POST(request:Request){
     if(!profile)return NextResponse.json({received:true,ignored:true});
     if(profile.paypal_subscription_id!==id)return NextResponse.json({received:true,ignored:true});
 
+    const eventCreated=typeof event.create_time==="string"?Date.parse(event.create_time):NaN;
+    if(!Number.isFinite(eventCreated))return NextResponse.json({error:"Date de notification PayPal invalide."},{status:503});
     const current=await subscription(id);
     if(current.id!==id||current.custom_id!==profile.id)
       return NextResponse.json({error:"Titulaire de l’abonnement PayPal incohérent."},{status:503});
@@ -88,22 +90,13 @@ export async function POST(request:Request){
     if(!["ACTIVE","APPROVAL_PENDING","APPROVED","SUSPENDED","CANCELLED","EXPIRED"].includes(status))
       return NextResponse.json({error:"État de l’abonnement PayPal non reconnu."},{status:503});
 
-    const env=process.env.PAYPAL_ENV?.toLowerCase()==="live"?"live":"sandbox";
-    const {data:aliases,error:aliasesError}=await db.from("artisan_paypal_plan_overrides")
-      .select("tier,paypal_plan_id").eq("environment",env);
-    if(aliasesError)return NextResponse.json({error:"Configuration de facturation indisponible."},{status:503});
-    const pro=process.env.PAYPAL_PRO_PLAN_ID,business=process.env.PAYPAL_BUSINESS_PLAN_ID;
-    const tier=pro&&current.plan_id===pro?"pro":business&&current.plan_id===business?"business":
-      aliases?.find((row:{tier:string;paypal_plan_id:string})=>row.paypal_plan_id===current.plan_id)?.tier||null;
-    if(tier!=="pro"&&tier!=="business")
-      return NextResponse.json({error:"Formule PayPal non reconnue."},{status:503});
-
-    const fallback=remainingPlan(profile,{pro:process.env.STRIPE_PRO_PRICE_ID,business:process.env.STRIPE_BUSINESS_PRICE_ID});
-    const plan=planAfterPaypalSync(status,tier,fallback);
-    const {error:updateError}=await db.from("profiles").update({
-      plan,paypal_subscription_status:status,subscription_updated_at:new Date().toISOString(),
-    }).eq("id",profile.id).eq("paypal_subscription_id",id);
-    if(updateError)return NextResponse.json({error:"Synchronisation PayPal différée."},{status:503});
-    return NextResponse.json({received:true});
+    const eventType=String(event.event_type);
+    const paymentEvent=eventType==="PAYMENT.SALE.COMPLETED"?"sale_completed":
+      eventType==="PAYMENT.SALE.REFUNDED"||eventType==="PAYMENT.SALE.REVERSED"?"refund":
+      eventType==="BILLING.SUBSCRIPTION.PAYMENT.FAILED"?"failed":"none";
+    const result=await reconcilePaypalSubscription(profile.id,current,{
+      eventId:String(event.id),observedAt:new Date(eventCreated).toISOString(),paymentEvent,
+    });
+    return NextResponse.json({received:true,ignored:result.reason==="duplicate"||result.reason==="out_of_order"});
   }catch{return NextResponse.json({error:"Synchronisation PayPal différée."},{status:503});}
 }
