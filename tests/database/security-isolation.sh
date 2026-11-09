@@ -66,7 +66,7 @@ psql_fixture() {
 }
 psql_fixture --file="$root/tests/database/security-fixture.sql"
 psql_fixture --file="$root/supabase/migrations/20261109020000_billing_coordination.sql"
-psql_fixture --file="$root/supabase/migrations/2026110903_profiles_protect_billing_fields.sql"
+psql_fixture --file="$root/supabase/migrations/20261109030000_profiles_protect_billing_fields.sql"
 psql_fixture --file="$root/tests/database/security-isolation.sql"
 psql_fixture --file="$root/tests/database/billing-coordination.sql"
 "$root/tests/database/billing-concurrency.sh" \
