@@ -25,15 +25,17 @@ export async function stripeRequest<T=Record<string, unknown>>(
   const key=process.env.STRIPE_SECRET_KEY;
   if (!key || !/^sk_(test|live)_/.test(key)) throw Error("Stripe secret key missing");
   if (!/^\/v1\/[a-z_\/\-0-9]+$/i.test(path)) throw Error("Invalid Stripe API path");
-  const response=await fetch(STRIPE_ORIGIN+path,{
-    method:options.method||"GET",
+  const method=options.method||"GET";
+  const url=STRIPE_ORIGIN+path+(method==="GET"&&options.params?"?"+options.params.toString():"");
+  const response=await fetch(url,{
+    method,
     headers:{
       Authorization:"Bearer "+key,
       "Stripe-Version":STRIPE_API_VERSION,
-      ...(options.params?{"Content-Type":"application/x-www-form-urlencoded"}:{}),
+      ...(options.params&&method==="POST"?{"Content-Type":"application/x-www-form-urlencoded"}:{}),
       ...(options.idempotencyKey?{"Idempotency-Key":options.idempotencyKey}:{}),
     },
-    body:options.params?.toString(),
+    body:method==="POST"?options.params?.toString():undefined,
     cache:"no-store",
   });
   const value=await response.json().catch(()=>({}));
@@ -45,14 +47,20 @@ export type StripePrice = {
   id:string; active:boolean; currency:string; unit_amount:number|null;
   recurring?:{interval:string;interval_count:number}|null;
 };
-export async function validatedPrice(tier:Tier):Promise<string> {
+async function getTierPrice(tier:Tier,requireActive:boolean):Promise<string> {
   const id=tier==="pro"?process.env.STRIPE_PRO_PRICE_ID:process.env.STRIPE_BUSINESS_PRICE_ID;
   if (!id || !/^price_[a-zA-Z0-9]+$/.test(id)) throw Error("Stripe price not configured");
   const price=await stripeRequest<StripePrice>("/v1/prices/"+id);
-  if (!price.active || price.currency!=="eur" || price.unit_amount!==PLAN_CENTS[tier]
+  if ((requireActive&&!price.active) || price.currency!=="eur" || price.unit_amount!==PLAN_CENTS[tier]
     || price.recurring?.interval!=="month" || Number(price.recurring?.interval_count||1)!==1)
     throw Error("Stripe price does not match ALEK published plan");
   return id;
+}
+export async function validatedPrice(tier:Tier):Promise<string> {
+  return getTierPrice(tier,true);
+}
+export async function verifiedSubscriptionPrice(tier:Tier):Promise<string> {
+  return getTierPrice(tier,false);
 }
 export function tierFromPrice(id:string):Tier|null {
   if(id===process.env.STRIPE_PRO_PRICE_ID) return "pro";
@@ -61,6 +69,7 @@ export function tierFromPrice(id:string):Tier|null {
 }
 export type StripeSubscription = {
   id:string; status:string; customer:string; metadata?:{user_id?:string;plan?:string};
+  current_period_end?:number|null; cancel_at_period_end?:boolean;
   items?:{data?:Array<{price?:{id?:string}|string}>};
   latest_invoice?:{paid?:boolean; status?:string}|string|null;
 };
@@ -77,7 +86,8 @@ export async function getSubscription(id:string):Promise<StripeSubscription>{
   return response.json() as Promise<StripeSubscription>;
 }
 export function verifiedPaidTier(sub:StripeSubscription):Tier|null {
-  if (sub.status!=="active") return null;
+  const paidThrough=typeof sub.current_period_end==="number"?sub.current_period_end*1000:0;
+  if (sub.status!=="active" && !(sub.status==="canceled"&&paidThrough>Date.now())) return null;
   if (typeof sub.latest_invoice!=="object" || !sub.latest_invoice?.paid) return null;
   const value=sub.items?.data?.[0]?.price;
   return tierFromPrice(typeof value==="string"?value:value?.id||"");
