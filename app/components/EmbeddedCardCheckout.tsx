@@ -4,6 +4,8 @@ import {useEffect,useRef,useState} from "react";
 import {useRouter} from "next/navigation";
 import {supabase} from "../lib/supabase";
 
+class PaymentMessage extends Error {}
+
 type Tier="pro"|"business";
 type EmbeddedInstance={mount:(element:HTMLElement)=>void;destroy:()=>void};
 type StripeInstance={initEmbeddedCheckout:(options:{
@@ -18,7 +20,8 @@ declare global{
 export default function EmbeddedCardCheckout({plan,onDone}:{plan:Tier;onDone:(message:string)=>void}){
   const router=useRouter();
   const mountRef=useRef<HTMLDivElement>(null);
-  const sessionIdRef=useRef<string|null>(null);
+  const onDoneRef=useRef(onDone);
+  useEffect(()=>{onDoneRef.current=onDone;},[onDone]);
   const [key,setKey]=useState("");
   const [scriptLoaded,setScriptLoaded]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -49,14 +52,17 @@ export default function EmbeddedCardCheckout({plan,onDone}:{plan:Tier;onDone:(me
     if(!key||!scriptLoaded||!mountRef.current)return;
     let disposed=false;
     let checkout:EmbeddedInstance|null=null;
+    let sessionId:string|null=null;
     async function initialize(){
       try{
         const {data:{session}}=await supabase.auth.getSession();
+        if(disposed)return;
         if(!session){router.push("/login");return;}
         const stripe=window.Stripe?.(key);
-        if(!stripe)throw Error("Chargement du paiement sécurisé impossible.");
+        if(!stripe)throw new PaymentMessage("Chargement du paiement sécurisé impossible.");
         const payment=await stripe.initEmbeddedCheckout({
           fetchClientSecret:async()=>{
+            if(disposed)throw new PaymentMessage("Initialisation annulée.");
             const resp=await fetch("/api/stripe/checkout",{
               method:"POST",
               headers:{"Authorization":"Bearer "+session.access_token,"Content-Type":"application/json"},
@@ -64,24 +70,26 @@ export default function EmbeddedCardCheckout({plan,onDone}:{plan:Tier;onDone:(me
             });
             const result=await resp.json();
             if(!resp.ok||!result.clientSecret||!result.sessionId)
-              throw Error(result.error||"Initialisation du paiement impossible.");
-            sessionIdRef.current=result.sessionId;
+              throw new PaymentMessage(result.error||"Initialisation du paiement impossible.");
+            if(disposed)throw new PaymentMessage("Initialisation annulée.");
+            sessionId=result.sessionId;
             return result.clientSecret;
           },
           onComplete:()=>{
+            if(disposed)return;
             void (async()=>{
               try{
                 const {data:{session:current}}=await supabase.auth.getSession();
-                if(!current||!sessionIdRef.current)throw Error("Session expirée. Reconnectez-vous.");
+                if(!current||!sessionId)throw new PaymentMessage("Session expirée. Reconnectez-vous.");
                 const response=await fetch("/api/stripe/confirm",{
                   method:"POST",
                   headers:{"Authorization":"Bearer "+current.access_token,"Content-Type":"application/json"},
-                  body:JSON.stringify({sessionId:sessionIdRef.current})
+                  body:JSON.stringify({sessionId:sessionId})
                 });
                 const result=await response.json();
-                if(!response.ok)throw Error(result.error||"Vérification du paiement impossible.");
-                onDone(result.message||"Paiement enregistré. Vérification de l'abonnement en cours.");
-              }catch(e){onDone(e instanceof Error?e.message:"Vérification en attente. Contactez le support si nécessaire.");}
+                if(!response.ok)throw new PaymentMessage(result.error||"Vérification du paiement impossible.");
+                if(!disposed)onDoneRef.current(result.message||"Paiement enregistré. Vérification de l'abonnement en cours.");
+              }catch(e){if(!disposed)onDoneRef.current(e instanceof PaymentMessage?e.message:"Vérification en attente. Contactez le support si nécessaire.");}
             })();
           },
         });
@@ -91,12 +99,12 @@ export default function EmbeddedCardCheckout({plan,onDone}:{plan:Tier;onDone:(me
         payment.mount(mountRef.current);
         setLoading(false);
       }catch(e){
-        if(!disposed){setError(e instanceof Error?e.message:"Le formulaire de carte est temporairement indisponible.");setLoading(false);}
+        if(!disposed){setError(e instanceof PaymentMessage?e.message:"Le formulaire de carte est temporairement indisponible.");setLoading(false);}
       }
     }
     void initialize();
     return()=>{disposed=true;checkout?.destroy();};
-  },[key,scriptLoaded,plan,router,onDone]);
+  },[key,scriptLoaded,plan,router]);
 
   return(
     <section id="paiement-par-carte" className="mt-8 scroll-mt-28 rounded-3xl border border-blue-200 bg-white px-4 py-7 shadow-lg sm:px-8">
