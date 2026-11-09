@@ -12,6 +12,7 @@ import { loadPdfRuntime } from "../lib/pdf-runtime";
 import { createDocumentPdf, savedInvoicePdfData, savedInvoicePdfWarnings } from "../lib/document-pdf";
 import { canDeleteDocument, canModifyDocument } from "../lib/document-policy";
 import { loadAccountDraft, saveAccountDraft } from "../lib/document-drafts";
+import { beginIssue, completeIssue, readIssueIntent, rejectIssue, startNewIssue, IssuanceError } from "../lib/document-issuance";
 
 type Lang = "ka" | "ru" | "fr" | "de" | "ar";
 type Plan = "free" | "pro" | "business";
@@ -248,6 +249,8 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [editorStep, setEditorStep] = useState(0);
   const [savingDocument, setSavingDocument] = useState(false);
+  const savingDocumentRef = useRef(false);
+  const [pendingIssue, setPendingIssue] = useState(false);
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [documentStatusFilter, setDocumentStatusFilter] = useState<"all" | "devis" | "paid" | "unpaid">("all");
   const editorSections = ["client-section", "services-section", "settings-section", "alek-live-preview"] as const;
@@ -289,6 +292,8 @@ export default function Home() {
       if (!active) return;
       try {
       if (draftUserIdRef.current !== draftUserId) return;
+      const intent = readIssueIntent(localStorage, draftUserId);
+      setPendingIssue(Boolean(intent && !intent.result));
       const draft = loadAccountDraft(localStorage, draftUserId);
       if (draft) {
         setSiteLang("fr");
@@ -540,7 +545,20 @@ export default function Home() {
     router.refresh();
   }
 
+  function allowNewDocument() {
+    try {
+      if (!draftUserId || draftUserIdRef.current !== draftUserId) throw new IssuanceError("Connexion requise.");
+      startNewIssue(localStorage, draftUserId);
+      setPendingIssue(false);
+      return true;
+    } catch (error) {
+      alert(error instanceof IssuanceError ? error.message : "Stockage local indisponible. Aucun document n’est émis.");
+      return false;
+    }
+  }
+
   function createNewDevis() {
+    if (!allowNewDocument()) return;
     setSelectedDocumentId(null);
     setShowHistory(false);
     setEditorStep(0);
@@ -560,6 +578,7 @@ export default function Home() {
   }
 
   function createNewInvoice() {
+    if (!allowNewDocument()) return;
     setSelectedDocumentId(null);
     setShowHistory(false);
     setEditorStep(0);
@@ -583,6 +602,7 @@ export default function Home() {
   }
 
   function transformToInvoice() {
+    if (!allowNewDocument()) return;
     const sourceDevis = devisNumber;
     setSelectedDocumentId(null);
     setEditorStep(0);
@@ -713,20 +733,21 @@ export default function Home() {
     };
   }
 
-  async function saveDocumentToDatabase() {
+  async function saveDocumentToDatabase(retryPending = false) {
     // Document numbers are allocated by Supabase during the actual insert.
     // A client-local counter can produce duplicate legal invoice numbers.
     if (!draftUserId || loadedDraftUserId !== draftUserId) {
       alert("Le compte est en cours de chargement. Réessayez dans un instant.");
       return;
     }
-    if (selectedDocumentId) {
+    if (selectedDocumentId && !retryPending) {
       if (!selectedDocument || selectedDocument.user_id !== draftUserId || !canModifyDocument(selectedDocument) || documentType !== "devis") {
         alert("Seul un devis appartenant au compte actif peut être modifié. La création d’un avoir n’est pas disponible dans cette version.");
         return;
       }
     }
-    if (savingDocument || !validateDocument(Boolean(selectedDocumentId))) return;
+    if (savingDocumentRef.current || (!retryPending && !validateDocument(Boolean(selectedDocumentId)))) return;
+    savingDocumentRef.current = true;
     setSavingDocument(true);
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -744,7 +765,7 @@ export default function Home() {
         return;
       }
       const payload = buildPayload(user.id);
-      if (selectedDocumentId) {
+      if (selectedDocumentId && !retryPending) {
         const { document_number: previousNumber, document_type: persistedType, ...editablePayload } = payload;
         void previousNumber;
         void persistedType;
@@ -754,20 +775,44 @@ export default function Home() {
         if (error) throw error;
         if (!updated) throw new Error("Le devis est introuvable ou n’est plus modifiable.");
       } else {
-        const { data, error } = await supabase.rpc("issue_artisan_document_v2", { p_payload: payload });
-        if (error) throw error;
-        const issued = data as { id?: string; document_number?: string } | null;
-        if (!issued?.id || !issued.document_number) throw new Error("Numérotation indisponible");
-        setSelectedDocumentId(issued.id);
-        if (documentType === "facture") setInvoiceNumber(issued.document_number);
-        else setDevisNumber(issued.document_number);
+        if (!navigator.locks) throw new IssuanceError("Ce navigateur ne permet pas de sécuriser la reprise d’émission. Utilisez un navigateur récent.");
+        await navigator.locks.request(`alek-issuance:${user.id}`, async () => {
+          if (draftUserIdRef.current !== user.id) throw new IssuanceError("Le compte a changé. Rechargez la page.");
+          const previous = readIssueIntent(localStorage, user.id);
+          if (retryPending && !previous) throw new IssuanceError("Aucune émission en attente. Consultez l’historique.");
+          const intent = retryPending && previous ? previous : beginIssue(localStorage, user.id, payload);
+          setPendingIssue(!intent.result);
+          let issued = intent.result;
+          if (!issued) {
+            const { data, error } = await supabase.rpc("issue_artisan_document_v2", {
+              p_payload: { ...intent.payload, request_id: intent.request_id },
+            });
+            if (error) {
+              rejectIssue(localStorage, user.id, intent.request_id, error.code);
+              setPendingIssue(Boolean(readIssueIntent(localStorage, user.id)));
+              throw error;
+            }
+            const result = data as { id?: string; document_number?: string } | null;
+            if (!result?.id || !result.document_number) throw new IssuanceError("Réponse d’émission incomplète. Reprenez la même demande.");
+            issued = { id: result.id, document_number: result.document_number };
+            completeIssue(localStorage, user.id, intent.request_id, issued);
+          }
+          if (draftUserIdRef.current !== user.id) return;
+          setPendingIssue(false);
+          setSelectedDocumentId(issued.id);
+          const isInvoice = intent.payload.document_type === "facture";
+          setDocumentType(isInvoice ? "facture" : "devis");
+          if (isInvoice) setInvoiceNumber(issued.document_number);
+          else setDevisNumber(issued.document_number);
+        });
       }
       await loadDocuments();
       alert(t.saveSuccess);
     } catch (error) {
       console.error("Document save failed:", error);
-      alert("Enregistrement impossible. Vérifiez l’historique avant de réessayer.");
+      alert(error instanceof IssuanceError ? error.message : "Enregistrement impossible. Vérifiez l’historique puis reprenez la même demande si elle reste en attente.");
     } finally {
+      savingDocumentRef.current = false;
       setSavingDocument(false);
     }
   }
@@ -1074,6 +1119,7 @@ export default function Home() {
           </section>
         )}
 
+        {pendingIssue && <div role="status" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p>Une émission reste à confirmer. La reprise réutilise les données et la référence de la demande initiale, même si le formulaire a changé. Ne recréez pas ce document.</p><button type="button" disabled={savingDocument} onClick={() => void saveDocumentToDatabase(true)} className="mt-3 rounded-xl bg-[#14213b] px-4 py-3 font-bold text-white disabled:opacity-50">{savingDocument ? "Vérification…" : "Reprendre l’émission en attente"}</button></div>}
         {isReadOnlyInvoice && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950"><p role="status">Facture émise : consultation et export PDF uniquement. Une correction nécessite un avoir ; cette fonction n’est pas disponible dans cette version. Les contrôles de cette interface ne remplacent pas les politiques RLS de la base.</p><button type="button" onClick={exportPdf} className="rounded-xl bg-[#14213b] px-5 py-3 font-bold text-white hover:bg-[#243957]">{t.createPdf}</button></div>}
         <fieldset disabled={isReadOnlyInvoice} aria-label={isReadOnlyInvoice ? "Éditeur désactivé pour cette facture émise" : "Éditeur de document"} className="min-w-0 border-0 p-0 disabled:opacity-75">
         <div className="space-y-7">
