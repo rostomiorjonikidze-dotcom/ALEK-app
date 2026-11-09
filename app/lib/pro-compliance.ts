@@ -1,3 +1,5 @@
+import { validDocumentDates, validISODate, validVatRate } from "./document-math";
+
 export type ClientKind = "professionnel" | "particulier";
 export type DocumentKind = "facture" | "devis";
 export type ComplianceInput = {
@@ -54,11 +56,13 @@ export function checkCompliance(v: ComplianceInput): Finding[] {
   if (!v.clientName?.trim()) add("important", "Nom ou raison sociale du client manquant.");
   if (!v.clientAddress?.trim()) add("important", "Adresse de facturation du client à renseigner, sauf cas particulier légal.");
   if (!v.issueDate) add("important", "Date du document manquante.");
+  else if (!validISODate(v.issueDate)) add("important", "Date du document invalide.");
   if (!v.lines?.length || v.lines.some(line => !line.description?.trim() || !Number.isFinite(line.price) || (line.price ?? -1) < 0 || !Number.isFinite(line.quantity) || (line.quantity ?? 0) <= 0)) add("important", "Désignation précise, quantité et prix des lignes à vérifier.");
   if (v.kind === "facture") {
     if (!v.documentNumber?.trim()) add("important", "Numéro unique de facture manquant (séquence chronologique continue).");
     if (!v.deliveryDate) add("attention", "Date de livraison ou d'exécution de la prestation à préciser.");
     if (!v.dueDate && !v.paymentTerms) add("important", "Date d'échéance ou délai de paiement manquant.");
+    if (v.dueDate && v.issueDate && validISODate(v.issueDate) && !validDocumentDates(v.issueDate, v.dueDate)) add("important", "Date d'échéance invalide ou antérieure à la date de facture.");
     if (v.clientKind === "professionnel") {
       if (!v.clientSiren || !/^\d{9}$/.test(v.clientSiren.replace(/\s/g, ""))) add("attention", "SIREN du client professionnel à vérifier selon le calendrier de la réforme.");
       if (!v.latePaymentTerms?.trim()) add("important", "Pénalités de retard et indemnité de recouvrement de 40 € à faire figurer sur les factures B2B.", SOURCES.payments);
@@ -71,9 +75,10 @@ export function checkCompliance(v: ComplianceInput): Finding[] {
     if (v.contractOutsidePremises) add("attention", "Vente à distance ou hors établissement : vérifier le droit de rétractation et les informations précontractuelles propres au cas.", SOURCES.devis);
     if (v.sector === "batiment") add("attention", "Bâtiment : vérifier assurance décennale, descriptif, délais, éventuel devis préalable et mentions spécifiques.", SOURCES.devis);
   }
+  if (v.vatRate !== undefined && !validVatRate(v.vatRate)) add("important", "Taux de TVA invalide : indiquez une valeur comprise entre 0 et 100 %.");
   if (v.vatExempt && v.vatRate !== undefined && v.vatRate !== 0) add("important", "Franchise de TVA et taux non nul : corrigez cette incohérence.");
   if (v.vatExempt) add("attention", "Franchise de TVA : confirmer votre éligibilité avant la mention « TVA non applicable, art. 293 B du CGI ».");
-  else if (!Number.isFinite(v.vatRate) || (v.vatRate ?? -1) < 0 || (v.vatRate ?? 101) > 100) add("attention", "Taux et régime de TVA à vérifier.");
+  else if (v.vatRate === undefined) add("attention", "Taux et régime de TVA à vérifier.");
   return findings;
 }
 export type TemplateKind = "contrat" | "offre" | "acceptation" | "cgv";
