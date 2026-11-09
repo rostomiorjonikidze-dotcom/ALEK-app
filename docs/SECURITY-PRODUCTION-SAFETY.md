@@ -1,0 +1,93 @@
+# Production security safety gate
+
+## Scope and verified boundary
+
+This repository contains no checked-in database migrations or deployed schema
+dump. No Supabase connection was available, and no live database or customer
+data was accessed. The external audit reports RLS enabled and two-user/anonymous
+SELECT isolation verified for the named private tables, and says
+`reserve_ai_usage`/`refund_ai_usage` are not executable by ordinary authenticated
+users. Those are audit inputs, not checks run in this workspace. Invoice issue
+RPC authorization is owned by the document-issuance workstream.
+
+The app currently reads profile billing fields including `role`, `plan`, Stripe
+and PayPal subscription/customer/price identifiers and statuses, and
+`subscription_updated_at`. Server billing routes write those fields using the
+service client. AI reservation is performed through RPCs; the actual quota
+storage schema is not present here.
+
+## Prepared profile guard
+
+`supabase/migrations/2026110903_profiles_protect_billing_fields.sql` is an
+unapplied, reversible migration. It fails if `public.profiles`, `role`, or
+`plan` is missing. It adds a row trigger, without replacing RLS policies or
+changing table grants. Authenticated profile edits to business information
+remain possible; entitlement, provider-ID/status, and quota/usage columns are
+immutable to ordinary roles. A new self-profile may use only database defaults
+for those protected fields. The service client role (`service_role`) may perform
+verified billing writes. The guard checks the SQL role, not a mutable JWT claim,
+so a `SECURITY DEFINER` RPC invoked by an authenticated user does not gain the
+service-role exception. The database owner remains trusted and can alter or
+disable the guard.
+
+Before applying anywhere, inspect the exact column list and defaults with
+`docs/database/inspect-schema.sql`. Review any column matched by the guard's
+name patterns, test auth sign-up/profile bootstrap and service-role billing
+updates against a schema clone, and verify that no alternate `SECURITY DEFINER`
+path changes protected values. The test fixture's table layout is deliberately
+synthetic; it is not asserted to match production.
+
+Rollback: in a reviewed rollback migration, drop trigger
+`public.guard_profile_entitlement_fields` from `public.profiles`, then drop
+function `public.guard_profile_entitlement_fields()`. The migration changes no
+rows, so rollback does not restore data. Rollback reopens profile-field
+escalation risk; do not use it as a routine release step.
+
+## Isolated security regression test
+
+`tests/database/security-fixture.sql` and
+`tests/database/security-isolation.sql` are synthetic-only and exercise two
+users, anonymous access, SELECT/INSERT/UPDATE/DELETE ownership, profile insert
+and update escalation, a `SECURITY DEFINER` bypass attempt, an ownership-checking
+RPC, service-role billing writes, and fixture-only receipts/signatures. They do
+not validate the actual deployed receipt/signature table names, policies, grants,
+RPCs, or storage.
+
+Run only in a disposable PostgreSQL database whose name begins
+`alek_security_fixture_` (the test setup recreates its fixture tables):
+
+```sh
+ALEK_SECURITY_TEST_DATABASE=alek_security_fixture_local \
+ALEK_SECURITY_TEST_CONFIRM_SYNTHETIC=YES \
+tests/database/security-isolation.sh
+```
+
+PostgreSQL roles/schema creation requires a suitably privileged test connection.
+The tests were not run here because no isolated database was provisioned. Never
+point the script at Supabase production or a database containing customer data.
+
+## Production verification checklist
+
+1. Export and review schema-only metadata using `docs/database/inspect-schema.sql`
+   from a controlled clone. Redact function bodies and defaults before sharing
+   if they contain secrets. Confirm the real table/column names, defaults, RLS
+   policies, grants, view security modes, triggers and every exposed routine.
+2. Apply the prepared migration only to a disposable clone first. Test signup,
+   self-service business-profile edits, plan/role/quota tampering, direct REST
+   writes, ordinary `SECURITY DEFINER` RPC attempts, and service-role billing
+   updates. Confirm legitimate billing/reconciliation code uses the service role.
+3. Use two isolated Supabase users plus anon and authenticated JWTs to check
+   SELECT, INSERT, UPDATE, DELETE and RPC behavior on the actual profiles,
+   documents, client/catalog/expense, receipt and signature objects. Include
+   ownership transfer attempts and token/hash/snapshot integrity checks. RLS
+   for one table does not establish isolation for another or for Storage.
+4. Review every `SECURITY DEFINER` function's owner, safe fixed `search_path`,
+   effective EXECUTE privileges, caller identity/ownership checks, and behavior
+   when called directly through PostgREST. Do not infer safety from application
+   routes or a function's name.
+5. Capture redacted test results and a rollback plan. Production application
+   requires explicit approval, a current backup/recovery plan, and a separate
+   release decision. No production migration is authorized by this document.
+
+No claim of full Supabase security, French legal invoicing compliance, or
+electronic-signature compliance is made here.

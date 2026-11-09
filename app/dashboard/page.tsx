@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { signOutUser } from "../lib/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -540,9 +541,13 @@ export default function Home() {
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/");
-    router.refresh();
+    try {
+      await signOutUser(supabase.auth);
+      router.replace("/");
+      router.refresh();
+    } catch {
+      alert("La déconnexion a échoué. Vérifiez votre connexion puis réessayez ; ne laissez pas cet appareil partagé sans surveillance.");
+    }
   }
 
   function allowNewDocument() {

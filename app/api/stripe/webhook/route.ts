@@ -1,10 +1,13 @@
 import {createHmac,timingSafeEqual} from "node:crypto";
 import {NextResponse} from "next/server";
 import {reconcileStripeSubscription} from "../../../lib/stripe-reconcile";
+import {stripeRequest} from "../../../lib/stripe-billing";
+import {admin} from "../../paypal/_shared";
+import {finishProviderCheckout} from "../../../lib/billing-store";
 import {readTextBody,RequestBodyError} from "../../../lib/request-body";
 export const runtime="nodejs";
 
-type StripeEvent={id:string;type:string;data:{object:Record<string,unknown>}};
+type StripeEvent={id:string;type:string;created:number;data:{object:Record<string,unknown>}};
 function authentic(payload:string,signature:string,secret:string):boolean{
   const parts=signature.split(",").map(p=>p.trim());
   const time=parts.find(p=>p.startsWith("t="))?.slice(2);
@@ -33,8 +36,19 @@ export async function POST(request:Request){
   try{event=JSON.parse(raw.charCodeAt(0)===0xfeff?raw.slice(1):raw) as StripeEvent;}catch{
     return NextResponse.json({error:"Événement invalide."},{status:400});
   }
-  if(!event || typeof event!=="object" || !event.type || !event.data?.object)return NextResponse.json({error:"Événement incomplet."},{status:400});
+  if(!event || typeof event!=="object" || typeof event.id!=="string" || !event.id
+    || typeof event.type!=="string" || !Number.isSafeInteger(event.created)
+    || !event.data?.object)return NextResponse.json({error:"Événement incomplet."},{status:400});
+  if(event.type==="checkout.session.expired"){
+    const id=event.data.object.id;
+    if(typeof id==="string"){
+      try{await finishProviderCheckout(admin(),"stripe",id,"failed");}
+      catch{return NextResponse.json({error:"Synchronisation différée."},{status:503});}
+    }
+    return NextResponse.json({received:true});
+  }
   let subscriptionId:string|null=null;
+  let paymentEvent:"none"|"sale_completed"|"refund"|"failed"="none";
   if(event.type==="checkout.session.completed" || event.type==="checkout.session.async_payment_succeeded"){
     const obj=event.data.object;
     if(obj.mode==="subscription" && typeof obj.subscription==="string")subscriptionId=obj.subscription;
@@ -43,14 +57,26 @@ export async function POST(request:Request){
     || event.type==="customer.subscription.resumed"){
     if(typeof event.data.object.id==="string")subscriptionId=event.data.object.id;
   }else if(event.type==="invoice.paid" || event.type==="invoice.payment_failed"){
+    paymentEvent=event.type==="invoice.paid"?"sale_completed":"failed";
     const parent=event.data.object.parent as {subscription_details?:{subscription?:string};subscription?:string}|undefined;
     const legacy=event.data.object.subscription;
     subscriptionId=(typeof legacy==="string"?legacy:
       parent?.subscription_details?.subscription||parent?.subscription)||null;
+  }else if(event.type==="charge.refunded" || event.type==="charge.dispute.created"){
+    paymentEvent="refund";
+    const invoice=event.data.object.invoice;
+    const invoiceId=typeof invoice==="string"?invoice:
+      invoice&&typeof invoice==="object"&&typeof (invoice as {id?:unknown}).id==="string"?(invoice as {id:string}).id:null;
+    if(invoiceId&&/^in_[A-Za-z0-9]+$/.test(invoiceId)){
+      const details=await stripeRequest<{subscription?:string|null;parent?:{subscription_details?:{subscription?:string}}}>("/v1/invoices/"+invoiceId);
+      subscriptionId=details.parent?.subscription_details?.subscription||details.subscription||null;
+    }
   }
   if(!subscriptionId)return NextResponse.json({received:true});
   try{
-    await reconcileStripeSubscription(subscriptionId);
+    await reconcileStripeSubscription(subscriptionId,undefined,{
+      eventId:event.id,eventCreated:event.created,paymentEvent,
+    });
     return NextResponse.json({received:true});
   }catch{
     // Stripe retries delivery on 5xx. Never grant access without verification.
