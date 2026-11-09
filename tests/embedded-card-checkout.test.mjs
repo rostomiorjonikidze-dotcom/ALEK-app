@@ -76,34 +76,11 @@ test("highest active entitlement is selected in both provider orderings",()=>{
   assert.equal(planAfterPaypalSync("CANCELLED","business","pro"),"pro");
 });
 
-test("Stripe reconciliation resolves active PayPal Business through configured aliases",async()=>{
+test("provider reconciliation delegates profile writes to the ordered database RPC",()=>{
   const source=readFileSync("app/lib/stripe-reconcile.ts","utf8");
-  const exports={};
-  let saved;
-  const profile={role:"user",plan:"pro",paypal_subscription_id:"I-ALIAS123456789",paypal_subscription_status:"ACTIVE",stripe_subscription_id:null,stripe_subscription_status:null};
-  const db={from(table){
-    const query={values:null,select(){return query;},eq(){return query;},update(values){query.values=values;return query;},
-      async maybeSingle(){return {data:table==="profiles"?profile:null,error:null};},
-      then(resolve){if(query.values)saved=query.values;return Promise.resolve({data:[{tier:"business",paypal_plan_id:"P-OVERRIDE-BUSINESS"}],error:null}).then(resolve);}};
-    return query;
-  }};
-  runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
-    exports,process:{env:{PAYPAL_ENV:"sandbox"}},Date,
-    require(name){
-      if(name==="server-only")return {};
-      if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription,planAfterPaypalSync};
-      if(name.endsWith("_shared"))return {admin:()=>db,subscription:async()=>({id:profile.paypal_subscription_id,custom_id:"00000000-0000-4000-8000-000000000001",status:"ACTIVE",plan_id:"P-OVERRIDE-BUSINESS"})};
-      if(name.endsWith("stripe-billing"))return {
-        getSubscription:async()=>({id:"sub_current",status:"active",customer:"cus_mock",metadata:{user_id:"00000000-0000-4000-8000-000000000001"},items:{data:[{price:{id:"price_pro"}}]}}),
-        tierFromPrice:id=>id==="price_pro"?"pro":id==="price_business"?"business":null,
-        verifiedPaidTier:()=>"pro",
-      };
-      throw Error("Unexpected import "+name);
-    },
-  });
-  const result=await exports.reconcileStripeSubscription("sub_current");
-  assert.equal(result.plan,"business");
-  assert.equal(saved.plan,"business");
+  assert.match(source,/applyVerifiedBillingState\(db/);
+  assert.doesNotMatch(source,/\.from\("profiles"\)[\s\S]*?\.update\(/);
+  assert.match(readFileSync("app/lib/billing-paypal.ts","utf8"),/applyVerifiedBillingState\(db/);
 });
 
 test("Stripe REST calls pin the version compatible with v3 embedded checkout",()=>{
@@ -112,10 +89,10 @@ test("Stripe REST calls pin the version compatible with v3 embedded checkout",()
 });
 
 // Execute the route with isolated provider and database substitutes: no network calls.
-function paypalRoute(profile,plan,{tier="pro",created=null}={}){
+function paypalRoute(profile,plan,{tier="pro",created=null,claim={}}={}){
   const source=readFileSync("app/api/paypal/checkout/route.ts","utf8");
   const calls=[];
-  const db={from(table){
+  const db={rpc:async(name)=>name==="billing_claim_checkout"?{data:{decision:"create",attempt_id:"00000000-0000-4000-8000-000000000001",fence:1,idempotency_key:"alek-0123456789abcdef0123456789abcdef" ,...claim},error:null}:{data:true,error:null},from(table){
     const query={select(){return query;},eq(){return query;},async maybeSingle(){return {data:table==="profiles"?profile:null,error:null};}};
     return query;
   }};
@@ -125,7 +102,10 @@ function paypalRoute(profile,plan,{tier="pro",created=null}={}){
     require(name){
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription};
-      if(name.endsWith("billing-idempotency"))return {billingIdempotencyKey};
+      if(name.endsWith("billing-store"))return {
+        claimCheckout:async()=>({decision:"create",attempt_id:"00000000-0000-4000-8000-000000000001",fence:1,idempotency_key:"alek-0123456789abcdef0123456789abcdef",...claim}),
+        finishCheckout:async(...args)=>calls.push({finish:args}),
+      };
       if(name==="../_shared")return {
         admin:()=>db,userFrom:async()=>({id:"user"}),paypalBase:()=>"https://mock.invalid",paypalToken:async()=>"mock",
         subscription:async(id)=>({id,plan_id:"P-CONFIGURED",custom_id:"user"}),
@@ -158,7 +138,7 @@ test("PayPal checkout fails closed on mismatched prices instead of creating bill
   assert.match(route.calls[0].url,/\/v1\/billing\/plans\/P-CONFIGURED$/);
 });
 
-test("PayPal checkout uses a stable provider request ID for duplicate retries",async()=>{
+test("PayPal checkout uses the durable claim's provider request ID",async()=>{
   const validPlan={id:"P-CONFIGURED",status:"ACTIVE",billing_cycles:[{tenure_type:"REGULAR",frequency:{interval_unit:"MONTH",interval_count:1},pricing_scheme:{fixed_price:{currency_code:"EUR",value:"19.99"}}}]};
   const first=paypalRoute({role:"user"},validPlan);
   const second=paypalRoute({role:"user"},validPlan);
@@ -167,7 +147,7 @@ test("PayPal checkout uses a stable provider request ID for duplicate retries",a
   const firstRequest=first.calls.find(call=>call.options?.method==="POST");
   const secondRequest=second.calls.find(call=>call.options?.method==="POST");
   assert.equal(firstRequest.options.headers["PayPal-Request-Id"],secondRequest.options.headers["PayPal-Request-Id"]);
-  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],billingIdempotencyKey("paypal","checkout","user"));
+  assert.equal(firstRequest.options.headers["PayPal-Request-Id"],"alek-0123456789abcdef0123456789abcdef");
   assert.ok(firstRequest.options.headers["PayPal-Request-Id"].length<=38);
   assert.equal(firstRequest.options.headers.Prefer,"return=representation");
   const createBody=JSON.parse(firstRequest.options.body);
@@ -175,18 +155,15 @@ test("PayPal checkout uses a stable provider request ID for duplicate retries",a
   assert.equal(createBody.custom_id,"user");
 });
 
-test("PayPal idempotent retry for a different tier returns conflict and no approval URL",async()=>{
+test("PayPal different-provider or tier checkout claim returns conflict before provider creation",async()=>{
   const businessPlan={id:"P-BUSINESS",status:"ACTIVE",billing_cycles:[{tenure_type:"REGULAR",frequency:{interval_unit:"MONTH",interval_count:1},pricing_scheme:{fixed_price:{currency_code:"EUR",value:"49.99"}}}]};
   const replay={id:"I-OLD12345678901",plan_id:"P-CONFIGURED",custom_id:"user",links:[{rel:"approve",href:"https://www.sandbox.paypal.com/checkoutnow?token=old"}]};
-  const route=paypalRoute({role:"user"},businessPlan,{tier:"business",created:replay});
+  const route=paypalRoute({role:"user"},businessPlan,{tier:"business",created:replay,claim:{decision:"conflict"}});
   const response=await route.post();
   assert.equal(response.status,409);
-  assert.match(response.body.error,/demande PayPal antérieure/);
-  assert.match(response.body.error,/Ne l’approuvez pas/);
   assert.equal("url" in response.body,false);
   const request=route.calls.find(call=>call.options?.method==="POST");
-  assert.equal(JSON.parse(request.options.body).plan_id,"P-BUSINESS");
-  assert.equal(request.options.headers["PayPal-Request-Id"],billingIdempotencyKey("paypal","checkout","user"));
+  assert.equal(request,undefined);
 });
 
 test("PayPal checkout fetches and verifies subscription when representation omits owner or plan",async()=>{
@@ -207,7 +184,10 @@ test("Stripe checkout sends a stable idempotency key to its provider client",asy
     require(name){
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("payment-policy"))return {hasBlockingStripeSubscription};
-      if(name.endsWith("billing-idempotency"))return {billingIdempotencyKey};
+      if(name.endsWith("billing-store"))return {
+        claimCheckout:async()=>({decision:"create",attempt_id:"00000000-0000-4000-8000-000000000001",fence:1,idempotency_key:"alek-0123456789abcdef0123456789abcdef"}),
+        finishCheckout:async()=>{},finishProviderCheckout:async()=>{},
+      };
       if(name.endsWith("_shared"))return {admin:()=>db,userFrom:async()=>({id:"user"})};
       if(name.endsWith("stripe-billing"))return {
         stripeConfigured:()=>true,validatedPrice:async()=>"price_pro",PLAN_CENTS:{pro:1999,business:4999},
@@ -222,13 +202,13 @@ test("Stripe checkout sends a stable idempotency key to its provider client",asy
   const firstKey=sentOptions.idempotencyKey;
   assert.equal((await post()).status,200);
   assert.equal(sentOptions.idempotencyKey,firstKey);
-  assert.equal(firstKey,billingIdempotencyKey("stripe","checkout","user"));
+  assert.equal(firstKey,"alek-0123456789abcdef0123456789abcdef");
 });
 
 function paypalWebhookRoute({profile,current,verification="SUCCESS",webhookId="WH-TEST"}){
   const source=readFileSync("app/api/paypal/webhook/route.ts","utf8");
   const exports={};
-  const calls={verification:[],subscriptions:[],filters:[],updates:[]};
+  const calls={verification:[],subscriptions:[],filters:[],applies:[],updates:[]};
   const db={from(table){
     const query={table,filters:[],values:null,select(){return query;},eq(key,value){query.filters.push([key,value]);return query;},
       update(values){query.values=values;return query;},
@@ -249,6 +229,10 @@ function paypalWebhookRoute({profile,current,verification="SUCCESS",webhookId="W
     require(name){
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("payment-policy"))return {planAfterPaypalSync,remainingPlan};
+      if(name.endsWith("billing-paypal"))return {reconcilePaypalSubscription:async(userId,details,observation)=>{
+        calls.applies.push({userId,details,observation});
+        return {status:details.status,plan:"pro",active:true};
+      }};
       if(name.endsWith("request-body"))return requestBody;
       if(name.endsWith("_shared"))return {
         admin:()=>{calls.admin=(calls.admin||0)+1;return db;},
@@ -277,7 +261,7 @@ test("PayPal webhook verifies raw event with configured ID and reconciles curren
   const subscriptionId="I-ABCDEF123456789";
   const profile={id:"00000000-0000-4000-8000-000000000001",role:"user",paypal_subscription_id:subscriptionId,plan:"free",stripe_subscription_status:null,stripe_price_id:null};
   const route=paypalWebhookRoute({profile,current:{id:subscriptionId,custom_id:profile.id,status:"ACTIVE",plan_id:"P-PRO"}});
-  const raw=JSON.stringify({id:"WH-EVENT-1",event_type:"BILLING.SUBSCRIPTION.CANCELLED",resource:{id:subscriptionId,status:"CANCELLED"}});
+  const raw=JSON.stringify({id:"WH-EVENT-1",event_type:"BILLING.SUBSCRIPTION.CANCELLED",create_time:"2026-11-09T12:00:00Z",resource:{id:subscriptionId,status:"CANCELLED"}});
   const result=await route.post(raw,paypalSignatureHeaders);
   assert.equal(result.status,200);
   assert.equal(route.calls.verification.length,1);
@@ -285,14 +269,14 @@ test("PayPal webhook verifies raw event with configured ID and reconciles curren
   assert.equal(verificationBody.webhook_id,"WH-TEST");
   assert.deepEqual(verificationBody.webhook_event,JSON.parse(raw));
   assert.deepEqual(route.calls.subscriptions,[subscriptionId]);
-  assert.deepEqual(route.calls.updates[0].values.plan,"pro");
-  assert.equal(route.calls.updates[0].values.paypal_subscription_status,"ACTIVE");
-  assert.ok(route.calls.updates[0].filters.some(([key,value])=>key==="paypal_subscription_id"&&value===subscriptionId));
+  assert.equal(route.calls.applies[0].userId,profile.id);
+  assert.equal(route.calls.applies[0].observation.eventId,"WH-EVENT-1");
+  assert.equal(route.calls.applies[0].details.status,"ACTIVE");
 });
 
 test("PayPal webhook rejects failed provider signature before database or subscription lookup",async()=>{
   const route=paypalWebhookRoute({profile:null,current:null,verification:"FAILURE"});
-  const raw=JSON.stringify({id:"WH-EVENT-2",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",resource:{id:"I-ABCDEF123456789"}});
+  const raw=JSON.stringify({id:"WH-EVENT-2",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",create_time:"2026-11-09T12:00:00Z",resource:{id:"I-ABCDEF123456789"}});
   const result=await route.post(raw,paypalSignatureHeaders);
   assert.equal(result.status,400);
   assert.equal(route.calls.admin,undefined);
@@ -310,22 +294,22 @@ test("PayPal webhook rejects oversized bodies before provider verification",asyn
 test("PayPal webhook ignores old subscription IDs and never updates a different profile link",async()=>{
   const profile={id:"00000000-0000-4000-8000-000000000002",role:"user",paypal_subscription_id:"I-OLD12345678901",plan:"free"};
   const route=paypalWebhookRoute({profile,current:{id:"I-NEW12345678901",custom_id:profile.id,status:"ACTIVE",plan_id:"P-PRO"}});
-  const raw=JSON.stringify({id:"WH-EVENT-3",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",resource:{id:"I-NEW12345678901"}});
+  const raw=JSON.stringify({id:"WH-EVENT-3",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",create_time:"2026-11-09T12:00:00Z",resource:{id:"I-NEW12345678901"}});
   const result=await route.post(raw,paypalSignatureHeaders);
   assert.equal(result.status,200);
   assert.equal(result.body.ignored,true);
   assert.equal(route.calls.subscriptions.length,0);
-  assert.equal(route.calls.updates.length,0);
+  assert.equal(route.calls.applies.length,0);
 });
 
 test("PayPal webhook refuses provider subscription owner mismatch without entitlement writes",async()=>{
   const subscriptionId="I-ABCDEF123456789";
   const profile={id:"00000000-0000-4000-8000-000000000004",role:"user",paypal_subscription_id:subscriptionId,plan:"free"};
   const route=paypalWebhookRoute({profile,current:{id:subscriptionId,custom_id:"00000000-0000-4000-8000-000000000005",status:"ACTIVE",plan_id:"P-PRO"}});
-  const raw=JSON.stringify({id:"WH-EVENT-4",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",resource:{id:subscriptionId}});
+  const raw=JSON.stringify({id:"WH-EVENT-4",event_type:"BILLING.SUBSCRIPTION.ACTIVATED",create_time:"2026-11-09T12:00:00Z",resource:{id:subscriptionId}});
   const result=await route.post(raw,paypalSignatureHeaders);
   assert.equal(result.status,503);
-  assert.equal(route.calls.updates.length,0);
+  assert.equal(route.calls.applies.length,0);
 });
 
 const crypto=await import("node:crypto");
@@ -339,6 +323,9 @@ test("a correctly signed but null Stripe event returns a French 400, not an exce
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("request-body"))return requestBody;
       if(name.endsWith("stripe-reconcile"))return {reconcileStripeSubscription:()=>assert.fail("Must not reconcile invalid events")};
+      if(name.endsWith("stripe-billing"))return {stripeRequest:async()=>assert.fail("Must not retrieve an invoice for an ignored event")};
+      if(name.endsWith("billing-store"))return {finishProviderCheckout:async()=>assert.fail("Must not finish checkout for an ignored event")};
+      if(name.endsWith("_shared"))return {admin:()=>assert.fail("Must not access the database for an ignored event")};
       throw Error("Unexpected import "+name);
     },
   });
@@ -360,6 +347,9 @@ test("Stripe webhook bounds streamed body bytes and returns the shared reader st
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("request-body"))return requestBody;
       if(name.endsWith("stripe-reconcile"))return {reconcileStripeSubscription:()=>assert.fail("Must not reconcile an oversized event")};
+      if(name.endsWith("stripe-billing"))return {stripeRequest:async()=>assert.fail("Must not retrieve an invoice for an oversized event")};
+      if(name.endsWith("billing-store"))return {finishProviderCheckout:async()=>assert.fail("Must not finish an oversized event")};
+      if(name.endsWith("_shared"))return {admin:()=>assert.fail("Must not access the database for an oversized event")};
       throw Error("Unexpected import "+name);
     },
   });
@@ -382,10 +372,13 @@ test("Stripe webhook authenticates exact BOM and whitespace bytes before JSON pa
       if(name==="next/server")return {NextResponse:{json:(body,options)=>({body,status:options?.status||200})}};
       if(name.endsWith("request-body"))return requestBody;
       if(name.endsWith("stripe-reconcile"))return {reconcileStripeSubscription:async()=>{reconciled=true;}};
+      if(name.endsWith("stripe-billing"))return {stripeRequest:async()=>assert.fail("Must not retrieve an invoice for an ignored event")};
+      if(name.endsWith("billing-store"))return {finishProviderCheckout:async()=>assert.fail("Must not finish checkout for an ignored event")};
+      if(name.endsWith("_shared"))return {admin:()=>assert.fail("Must not access the database for an ignored event")};
       throw Error("Unexpected import "+name);
     },
   });
-  const payload="\uFEFF  {\"id\":\"evt_test\",\"type\":\"ignored.event\",\"data\":{\"object\":{}}}  \n";
+  const payload="\uFEFF  {\"id\":\"evt_test\",\"type\":\"ignored.event\",\"created\":1762693200,\"data\":{\"object\":{}}}  \n";
   const timestamp=Math.floor(Date.now()/1000);
   const signature=crypto.createHmac("sha256",secret).update(timestamp+"."+payload).digest("hex");
   const result=await exports.POST(new Request("https://mock.invalid/webhook",{method:"POST",headers:{"stripe-signature":`t=${timestamp},v1=${signature}`},body:payload}));

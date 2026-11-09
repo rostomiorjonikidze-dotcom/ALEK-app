@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation";
 import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { supabase } from "../lib/supabase";
 
-import { authErrorMessage, initializeAuthSession, passwordIsStrong, signupConfirmationMessage } from "../lib/auth";
+import {
+  authErrorMessage,
+  initializeAuthCallbackSession,
+  isAuthCallbackUrl,
+  passwordIsStrong,
+  registerWithEmailConfirmation,
+  requestPasswordRecovery,
+  signInWithEmailAndPassword,
+  signupConfirmationMessage,
+} from "../lib/auth";
 
 type Mode = "login" | "signup";
 
@@ -69,14 +78,11 @@ export default function LoginPage() {
   const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    if (!params.has("code") && !hash.has("access_token") && !params.has("error") && !hash.has("error")) return;
+    if (!isAuthCallbackUrl(window.location.href)) return;
     let active = true;
     void (async () => {
       try {
-        if (params.has("error") || hash.has("error")) throw new Error("expired token");
-        const session = await initializeAuthSession(supabase.auth);
+        const session = await initializeAuthCallbackSession(supabase.auth, window.location.href);
         if (active && session) { router.replace("/dashboard"); router.refresh(); }
         else if (active) setMessage("Connectez-vous pour accéder à votre espace.");
       } catch (error) { if (active) setMessage(authErrorMessage(error)); }
@@ -107,10 +113,14 @@ export default function LoginPage() {
     if (captchaEnabled && !captchaToken) { setMessage(t.captchaRequired); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: `${window.location.origin}/reset-password`, ...(captchaEnabled ? { captchaToken } : {}) });
-      if (error) { setMessage(authErrorMessage(error.message)); return; }
+      await requestPasswordRecovery(
+        supabase.auth,
+        cleanEmail,
+        new URL("/reset-password", window.location.origin).toString(),
+        captchaEnabled ? captchaToken : undefined,
+      );
       setMessage(recoveryLabels[2]);
-    } catch { setMessage("Impossible de demander la réinitialisation du mot de passe. Réessayez."); }
+    } catch (error) { setMessage(authErrorMessage(error)); }
     finally { setLoading(false); captchaRef.current?.resetCaptcha(); setCaptchaToken(""); }
   }
 
@@ -166,7 +176,7 @@ export default function LoginPage() {
 
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
+        const session = await registerWithEmailConfirmation(supabase.auth, {
           email: cleanEmail,
           password,
           options: {
@@ -181,24 +191,14 @@ export default function LoginPage() {
           },
         });
 
-        if (error) {
-          setMessage(authErrorMessage(error.message));
-          return;
-        }
-
-        setMessage(data.session ? t.accountReady : t.signupSuccess);
-        if (data.session) { router.replace("/dashboard"); router.refresh(); }
+        setMessage(session ? t.accountReady : t.signupSuccess);
+        if (session) { router.replace("/dashboard"); router.refresh(); }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        await signInWithEmailAndPassword(supabase.auth, {
           email: cleanEmail,
           password,
           options: captchaEnabled ? { captchaToken } : undefined,
         });
-
-        if (error) {
-          setMessage(authErrorMessage(error.message));
-          return;
-        }
 
         router.push("/dashboard");
         router.refresh();

@@ -15,8 +15,10 @@ export function readIssueIntent(storage: Storage, userId: string): Intent | null
   if (!raw) return null;
   let value: Intent;
   try { value = JSON.parse(raw); } catch { throw new IssuanceError("La demande locale est illisible. Vérifiez l’historique avant toute nouvelle émission."); }
-  if (!value || value.user_id !== userId || !/^[0-9a-f-]{36}$/i.test(value.request_id)
-    || value.payload?.user_id !== userId || !["devis", "facture"].includes(value.payload.document_type)) {
+  if (!value || value.user_id !== userId || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value.request_id)
+    || value.payload?.user_id !== userId || !["devis", "facture"].includes(value.payload.document_type)
+    || (value.result !== undefined && (!value.result || typeof value.result.id !== "string" || !value.result.id
+      || typeof value.result.document_number !== "string" || !value.result.document_number))) {
     throw new IssuanceError("La demande locale ne correspond pas au compte actif. Aucune nouvelle émission n’est lancée.");
   }
   return value;
