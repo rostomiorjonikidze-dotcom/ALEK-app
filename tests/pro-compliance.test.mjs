@@ -35,3 +35,12 @@ test("checker flags invalid line quantities and negative prices", () => {
     assert.ok(checkCompliance({ kind: "devis", clientKind: "particulier", lines: [line] }).some(w => /quantité et prix/.test(w.message)));
   }
 });
+
+test("checker flags invalid issue, due dates, and VAT rates", () => {
+  const warnings = checkCompliance({ kind: "facture", clientKind: "particulier", issueDate: "2026-02-30", dueDate: "2026-02-30", vatRate: 120 });
+  assert.ok(warnings.some(w => /Date du document invalide/.test(w.message)));
+  assert.ok(warnings.some(w => /Date d'échéance invalide/.test(w.message)));
+  assert.ok(warnings.some(w => /Taux de TVA invalide/.test(w.message)));
+  const overdue = checkCompliance({ kind: "facture", clientKind: "particulier", issueDate: "2026-02-10", dueDate: "2026-02-01" });
+  assert.ok(overdue.some(w => /antérieure à la date de facture/.test(w.message)));
+});
