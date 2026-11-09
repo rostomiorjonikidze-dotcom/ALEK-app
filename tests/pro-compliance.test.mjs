@@ -24,3 +24,14 @@ test("contract and reminder templates use given names", () => {
   assert.match(note.body,/FAC-01/);
   assert.match(note.body,/Client B/);
 });
+
+test("checker rejects malformed client SIREN and inconsistent VAT", () => {
+  const warnings = checkCompliance({ kind: "facture", clientKind: "professionnel", clientSiren: "123456789extra", vatExempt: true, vatRate: 20 });
+  assert.ok(warnings.some(w => /SIREN du client/.test(w.message)));
+  assert.ok(warnings.some(w => w.level === "important" && /taux non nul/.test(w.message)));
+});
+test("checker flags invalid line quantities and negative prices", () => {
+  for (const line of [{ description: "Travaux", price: -1, quantity: 1 }, { description: "Travaux", price: 10, quantity: 0 }]) {
+    assert.ok(checkCompliance({ kind: "devis", clientKind: "particulier", lines: [line] }).some(w => /quantité et prix/.test(w.message)));
+  }
+});

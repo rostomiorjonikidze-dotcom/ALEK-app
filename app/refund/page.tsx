@@ -38,7 +38,7 @@ export default function RefundPage() {
         <p className="mt-2 text-sm text-stone-500">Dernière mise à jour : {LEGAL.updatedAt}</p>
         <div className="mt-8 space-y-7 leading-7 text-stone-700">
           <section><h2 className="text-xl font-bold text-stone-900">1. Abonnements</h2>
-            <p className="mt-2">Les offres Pro et Business sont prévues comme des abonnements mensuels renouvelés automatiquement jusqu’à résiliation.</p>
+            <p className="mt-2">Les offres Pro et Avancé sont prévues comme des abonnements mensuels renouvelés automatiquement jusqu’à résiliation.</p>
           </section>
           <section><h2 className="text-xl font-bold text-stone-900">2. Annulation</h2>
             <p className="mt-2">Pour les abonnements par carte ou les anciens abonnements PayPal, vous pouvez résilier en ligne depuis « Résilier votre contrat » ou contacter le support. Si votre abonnement utilise encore PayPal, vous pouvez également y annuler le paiement automatique. Une résiliation prend généralement effet à la fin de la période déjà réglée, sauf règles impératives contraires.</p>
