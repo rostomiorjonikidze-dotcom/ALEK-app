@@ -1,6 +1,7 @@
 import { hasBlockingStripeSubscription } from "../../../lib/payment-policy";
+import { billingIdempotencyKey } from "../../../lib/billing-idempotency";
 import { NextResponse } from "next/server";
-import { admin, paypalBase, paypalToken, userFrom } from "../_shared";
+import { admin, paypalBase, paypalToken, subscription, userFrom } from "../_shared";
 
 export const runtime = "nodejs";
 type Tier = "pro" | "business";
@@ -82,7 +83,12 @@ export async function POST(request: Request) {
 
     const response = await fetch(paypalBase() + "/v1/billing/subscriptions", {
       method: "POST", cache: "no-store",
-      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", "PayPal-Request-Id": crypto.randomUUID() },
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        "PayPal-Request-Id": billingIdempotencyKey("paypal", "checkout", user.id),
+      },
       body: JSON.stringify({
         plan_id: planId, custom_id: user.id,
         application_context: {
@@ -93,9 +99,21 @@ export async function POST(request: Request) {
       }),
     });
     const result = await response.json();
+    if (!response.ok) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
+    if (typeof result?.id !== "string" || !/^I-[A-Z0-9]{8,30}$/i.test(result.id))
+      return NextResponse.json({ error: "Impossible de vérifier la demande PayPal." }, { status: 502 });
+    let confirmed = result;
+    if (typeof result.plan_id !== "string" || typeof result.custom_id !== "string") {
+      confirmed = await subscription(result.id);
+    }
+    if (confirmed?.id !== result.id || confirmed?.plan_id !== planId || confirmed?.custom_id !== user.id) {
+      return NextResponse.json({
+        error: "Une demande PayPal antérieure est en attente avec une formule différente ou un autre compte. Ne l’approuvez pas; contactez le support pour l’annuler avant de réessayer.",
+      }, { status: 409 });
+    }
     const url = result?.links?.find((link: { rel: string; href: string }) => link.rel === "approve")?.href as string | undefined;
     const valid = url && (url.startsWith("https://www.paypal.com/") || url.startsWith("https://www.sandbox.paypal.com/"));
-    if (!response.ok || !valid) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
+    if (!valid) return NextResponse.json({ error: "Impossible de lancer l'abonnement PayPal." }, { status: 502 });
     return NextResponse.json({ url });
   } catch {
     return NextResponse.json({ error: "Le service de paiement est temporairement indisponible." }, { status: 503 });
