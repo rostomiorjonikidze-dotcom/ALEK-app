@@ -85,7 +85,10 @@ BEGIN
 
   -- Verify the signed request and caller's SET ROLE context. current_role alone
   -- can change inside SECURITY DEFINER and is not a sufficient caller check.
-  IF current_role = 'service_role'
+  -- Trusted service-role requests may run through existing postgres-owned
+  -- SECURITY DEFINER quota functions. The signed JWT and SET ROLE must both
+  -- attest service_role: current_role alone would reject those internal updates.
+  IF current_role IN ('service_role', 'postgres')
      AND current_setting('role', true) = 'service_role'
      AND v_jwt_role = 'service_role' THEN
     RETURN NEW;
