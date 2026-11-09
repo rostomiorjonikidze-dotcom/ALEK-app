@@ -15,6 +15,12 @@ export default function SiteHeader() {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-40 border-b border-white/70 bg-white/90 shadow-[0_8px_35px_rgba(12,35,77,.07)] backdrop-blur-2xl">
+      <a
+        href="#contenu-principal"
+        className="absolute left-4 top-[-5rem] z-50 rounded-xl bg-blue-700 px-4 py-3 font-bold text-white shadow-lg focus:top-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+      >
+        Aller au contenu principal
+      </a>
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-4 sm:gap-4 sm:px-5">
         <Link href="/" className="flex shrink-0 items-center gap-2 sm:gap-3" aria-label="ALEK Artisan — accueil">
           <span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[#0a1c3a] to-[#2867ce] text-xl font-black text-white shadow-lg shadow-blue-900/20">A</span>
